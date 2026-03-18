@@ -1,0 +1,446 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg:        #080c14;
+    --panel:     #0d1420;
+    --border:    #1e2d45;
+    --accent:    #00d4ff;
+    --accent2:   #ff6b35;
+    --text:      #c8d8f0;
+    --text-dim:  #4a6080;
+    --green:     #00ff88;
+    --red:       #ff4466;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .header-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: white;
+  }
+  .header-title span { color: var(--accent); }
+
+  .header-info {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  /* ── Layout ── */
+  .container {
+    display: flex;
+    height: calc(100vh - 62px);
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 240px;
+    min-width: 240px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+
+  .search-box {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .search-box input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 10px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-box input:focus { border-color: var(--accent); }
+  .search-box input::placeholder { color: var(--text-dim); }
+
+  .coin-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 0;
+  }
+  .coin-list::-webkit-scrollbar { width: 4px; }
+  .coin-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .coin-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-left: 3px solid transparent;
+  }
+  .coin-item:hover { background: rgba(0,212,255,0.04); }
+  .coin-item.active { border-left-color: var(--accent); background: rgba(0,212,255,0.07); }
+
+  .coin-check {
+    width: 14px; height: 14px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .coin-item.checked .coin-check {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .coin-check svg { display: none; }
+  .coin-item.checked .coin-check svg { display: block; }
+
+  .coin-rank {
+    font-size: 10px;
+    color: var(--text-dim);
+    width: 22px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .coin-symbol {
+    font-size: 12px;
+    font-weight: 600;
+    color: white;
+    flex: 1;
+  }
+  .coin-name {
+    font-size: 10px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px;
+  }
+
+  .sidebar-actions {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+  }
+  .btn {
+    flex: 1;
+    padding: 7px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+  .btn.primary:hover { background: rgba(0,212,255,0.18); }
+
+  /* ── Main Chart Area ── */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .chart-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-wrap: wrap;
+  }
+
+  .toolbar-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .cycle-toggles {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .cycle-btn {
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+  }
+
+  .chart-area {
+    flex: 1;
+    min-height: 300px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #chart { width: 100%; height: 100%; min-height: 300px; }
+
+  /* ── Legend ── */
+  .legend {
+    position: absolute;
+    top: 12px;
+    left: 16px;
+    background: rgba(8,12,20,0.88);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 11px;
+    pointer-events: none;
+    backdrop-filter: blur(8px);
+    min-width: 220px;
+  }
+  .legend-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0;
+    color: var(--text);
+  }
+  .legend-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .legend-info { font-size: 10px; color: var(--text-dim); }
+
+  /* ── Stats Bar ── */
+  .stats-bar {
+    display: flex;
+    gap: 0;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    overflow-x: auto;
+  }
+  .stat-item {
+    padding: 8px 20px;
+    border-right: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .stat-label { font-size: 9px; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 2px; }
+  .stat-value { font-size: 12px; color: white; font-weight: 600; }
+  .stat-value.up   { color: var(--green); }
+  .stat-value.down { color: var(--red); }
+
+  /* ── Empty state ── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-dim);
+    gap: 12px;
+  }
+  .empty-state .icon { font-size: 48px; opacity: 0.3; }
+  .empty-state p { font-size: 13px; letter-spacing: 1px; }
+
+  /* Bear/Bull labels */
+  .bb-label {
+    position: absolute;
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    pointer-events: none;
+    opacity: 0.85;
+  }
+  .bb-bear {
+    color: #ff4466;
+    background: rgba(255,68,102,0.12);
+    border: 1px solid rgba(255,68,102,0.3);
+  }
+  .bb-bull {
+    color: #00ff88;
+    background: rgba(0,255,136,0.12);
+    border: 1px solid rgba(0,255,136,0.3);
+  }
+
+  /* ── Box Zone Marks ── */
+  .bz-mark {
+    position: absolute;
+    pointer-events: all;
+    cursor: pointer;
+    transform: translate(-50%, -50%);
+    z-index: 20;
+  }
+  /* 박스 고점/저점 마크: 작은 원 */
+  .bz-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    border: 1.5px solid;
+  }
+  .bz-dot.bear-hi { background: rgba(255,68,102,0.3);  border-color: #ff4466; }
+  .bz-dot.bear-lo { background: rgba(0,255,136,0.25);  border-color: #00ff88; }
+  .bz-dot.bull-hi { background: rgba(255,184,0,0.3);   border-color: #FFB800; }
+  .bz-dot.bull-lo { background: rgba(0,255,136,0.25);  border-color: #00ff88; }
+
+  /* 박스 마크 레이블 */
+  .bz-label {
+    position: absolute;
+    pointer-events: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    white-space: nowrap;
+    opacity: 0.85;
+    z-index: 21;
+  }
+  .bz-label.bear { color: #ff6688; }
+  .bz-label.bull { color: #FFB800; }
+
+  /* 예측 박스 마크 (더 진하고 눈에 띄게) */
+  .bz-mark.prediction { opacity: 0.9; }
+  .bz-label.prediction { opacity: 0.95; font-style: italic; }
+
+  /* 예측 경로 끝 라벨 */
+  .pred-path-end {
+    position: absolute;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 20;
+  }
+
+  /* 사이클 저점 마크: 큰 다이아몬드 */
+  .cycle-low-mark {
+    position: absolute;
+    pointer-events: all;
+    cursor: pointer;
+    transform: translate(-50%, -50%) rotate(45deg);
+    width: 14px; height: 14px;
+    background: rgba(0,212,255,0.25);
+    border: 2px solid #00d4ff;
+    z-index: 25;
+  }
+  .cycle-low-label {
+    position: absolute;
+    pointer-events: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: #00d4ff;
+    white-space: nowrap;
+    z-index: 25;
+  }
+
+  /* ── Crosshair Tooltip (crosshair + box zone 공용) ── */
+  #crosshairTooltip {
+    position: absolute;
+    display: none;
+    pointer-events: none;
+    z-index: 100;
+    background: rgba(8,12,20,0.92);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 11px;
+    min-width: 200px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  #crosshairTooltip .tt-day {
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 6px;
+    letter-spacing: 1px;
+  }
+  #crosshairTooltip .tt-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 3px 0;
+  }
+  #crosshairTooltip .tt-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  #crosshairTooltip .tt-label {
+    color: var(--text-dim);
+    font-size: 10px;
+    flex: 1;
+  }
+  #crosshairTooltip .tt-val {
+    color: white;
+    font-weight: 600;
+  }
+  #crosshairTooltip .tt-date {
+    color: var(--text-dim);
+    font-size: 10px;
+  }
+  /* box zone tooltip (bt-* when shown in crosshairTooltip) */
+  #crosshairTooltip .bt-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+  }
+  #crosshairTooltip .bt-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 3px 0;
+    font-size: 10px;
+  }
+  #crosshairTooltip .bt-key  { color: var(--text-dim); }
+  #crosshairTooltip .bt-val  { color: white; font-weight: 600; }
+  #crosshairTooltip .bt-up   { color: #00ff88; }
+  #crosshairTooltip .bt-down { color: #ff4466; }

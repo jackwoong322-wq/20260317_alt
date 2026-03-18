@@ -1,0 +1,13 @@
+{
+  "name": "pairusdt-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build:ts": "esbuild templates/chart-logic.ts templates/chart-render.ts templates/chart-ui.ts templates/chart.ts --bundle=false --outdir=templates/dist --platform=browser --target=es2020",
+    "check:ts": "tsc -p tsconfig.frontend.json --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2",
+    "typescript": "^5.9.3"
+  }
+}

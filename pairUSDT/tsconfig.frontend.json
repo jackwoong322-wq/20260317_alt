@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": false,
+    "noImplicitAny": false,
+    "lib": ["ES2020", "DOM"],
+    "outDir": "./templates/dist",
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": [
+    "templates/globals.d.ts",
+    "templates/chart-constants.ts",
+    "templates/chart-logic.ts",
+    "templates/chart-render-init.ts",
+    "templates/chart-render-overlays.ts",
+    "templates/chart-render-legend-stats.ts",
+    "templates/chart-render-tooltip.ts",
+    "templates/chart-draw.ts",
+    "templates/chart-series-helpers.ts",
+    "templates/chart-series-main.ts",
+    "templates/chart-series-highlow.ts",
+    "templates/chart-series-boxzone.ts",
+    "templates/chart-series-prediction.ts",
+    "templates/chart-series-bearbull.ts",
+    "templates/chart-ui.ts",
+    "templates/chart.ts"
+  ]
+}
+
