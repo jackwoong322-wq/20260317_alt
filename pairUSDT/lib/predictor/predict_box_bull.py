@@ -237,90 +237,103 @@ def build_bull_chain(
     ref_lo: float,
     cycle_lo: float,
     max_bull_chain: int | None = None,
+    ref_bull_ranges: list | None = None,
+    ref_bull_pullbacks: list | None = None,
 ):
-    """Build chain of BULL boxes from bottom to peak. max_bull_chain이 None이면 config MAX_BULL_CHAIN 사용 (BTC는 예측값으로 전달 가능)."""
+    """Bull 체인: lo→hi 상승폭(ref_bull_ranges) + hi→next_lo 눌림폭(ref_bull_pullbacks) 기반.
+
+    lo[0]   = bottom_lo (고정)
+    hi[i]   = lo[i] * (1 + range[i]/100)        ← 2021 상승폭
+    lo[i+1] = hi[i] * (1 + pullback[i]/100)     ← 2021 눌림폭 (음수)
+    hi[N-1] = peak_hi (고정)
+    """
     bull_start_first = bottom_day + 1
     if peak_day_pred <= bull_start_first:
         return [], []
 
     total_days = peak_day_pred - bull_start_first + 1
     n_boxes_raw = max(2, (total_days + pred_dur_bull - 1) // max(1, pred_dur_bull))
-    n_boxes = min(max_bull_chain if max_bull_chain is not None else MAX_BULL_CHAIN, n_boxes_raw)
+    N = min(max_bull_chain if max_bull_chain is not None else MAX_BULL_CHAIN, n_boxes_raw)
+    dur_per_box = total_days // N
+
+    _BULL_RANGE_DEFAULT = 42.0   # fallback 상승폭 %
+    _BULL_PULLBACK_DEFAULT = -15.0  # fallback 눌림폭 %
 
     bull_rows: list[tuple] = []
     path_specs: list[tuple] = []
     box_idx = next_box_idx_after_bear
 
-    alpha = 2.0
+    chain_day = bottom_day
+    chain_val = bottom_lo
+    bull_lo = max(0.01, min(MAX_PRED_LO, float(bottom_lo)))  # box0 lo = bottom_lo
 
-    def _ease(k: float) -> float:
-        return float(np.log1p(alpha * k) / np.log1p(alpha))
-
-    positions = [_ease(i / n_boxes) for i in range(n_boxes + 1)]
-
-    for i in range(n_boxes):
-        pos_lo = positions[i]
-        pos_hi = positions[i + 1]
-
-        start_off = int(round(total_days * pos_lo))
-        end_off = int(round(total_days * pos_hi)) - 1
-        if end_off < start_off:
-            end_off = start_off
-
-        b_start = bull_start_first + start_off
-        b_end = bull_start_first + end_off
-        if b_start > peak_day_pred:
-            continue
-        if b_end > peak_day_pred:
+    for i in range(N):
+        # ── 기간 ──────────────────────────────────────────
+        b_start = bull_start_first if i == 0 else chain_day + 1
+        b_end = min(b_start + dur_per_box - 1, peak_day_pred)
+        if i == N - 1:
             b_end = peak_day_pred
-
         pred_dur_b = b_end - b_start + 1
-        if pred_dur_b <= 0:
-            continue
+        if pred_dur_b <= 0 or b_start > peak_day_pred:
+            break
 
-        bull_lo = bottom_lo + (peak_hi - bottom_lo) * pos_lo
-        bull_hi = bottom_lo + (peak_hi - bottom_lo) * pos_hi
-        bull_lo = float(np.clip(bull_lo, min(bottom_lo, peak_hi), max(bottom_lo, peak_hi)))
-        bull_hi = float(np.clip(bull_hi, min(bottom_lo, peak_hi), max(bottom_lo, peak_hi)))
-        if bull_hi <= bull_lo:
-            bull_hi = bull_lo + max(0.01, (peak_hi - bottom_lo) * 0.05)
-        bull_hi = min(max(bull_hi, 0.01), MAX_PRED_HI)
-        bull_lo = min(max(bull_lo, 0.01), MAX_PRED_LO)
+        # ── hi: lo * (1 + range/100)  상승폭 ────────────
+        if ref_bull_ranges and i < len(ref_bull_ranges):
+            range_pct = float(ref_bull_ranges[i])
+        else:
+            range_pct = _BULL_RANGE_DEFAULT
+        bull_hi = bull_lo * (1.0 + range_pct / 100.0)
 
-        hi_change_bull = _safe_div_pct(bull_hi, ref_lo)
-        lo_change_bull = _safe_div_pct(bull_lo, bull_hi)
-        gain_bull = _safe_div_pct(bull_hi, cycle_lo) if cycle_lo > 0 else 0.0
-        range_bull = _safe_div_pct(bull_hi, bull_lo) if bull_lo > 0 else 0.0
+        # 마지막 박스: hi = peak_hi 고정
+        if i == N - 1:
+            bull_hi = max(0.01, min(MAX_PRED_HI, float(peak_hi)))
+
+        bull_hi = min(max(bull_hi, bull_lo * 1.05), MAX_PRED_HI)
 
         hi_day_bull = b_start + pred_dur_b // 4
         lo_day_bull = b_start + pred_dur_b * 3 // 4
+        range_bull = _safe_div_pct(bull_hi, bull_lo) if bull_lo > 0 else 0.0
+        hi_change_bull = _safe_div_pct(bull_hi, ref_lo)
+        lo_change_bull = _safe_div_pct(bull_lo, bull_hi)
+        gain_bull = _safe_div_pct(bull_hi, cycle_lo) if cycle_lo > 0 else 0.0
 
         row = _make_bull_row(
             coin_id, last, max_cyc, box_idx, b_start, b_end, bull_hi, bull_lo,
             hi_day_bull, lo_day_bull, pred_dur_b, range_bull, hi_change_bull, lo_change_bull, gain_bull,
         )
         bull_rows.append(row)
-        path_specs.append((b_start, b_end, bull_hi, bull_lo, hi_day_bull, lo_day_bull))
+        path_specs.append((b_start, b_end, bull_hi, bull_lo, hi_day_bull, lo_day_bull, chain_day, chain_val))
         box_idx += 1
+
         if str(last["symbol"]).upper() in {"BTC", "ETH", "XRP"}:
-            _hi_log_chain = min(float(bull_hi), MAX_PRED_HI - 0.01)
             print(
-                f"  ▶ PRED_BULL_CHAIN  box#{next_box_idx_after_bear + i + 1}"
+                f"  ▶ PRED_BULL_CHAIN  box#{box_idx}"
                 f"  day {b_start}~{b_end} ({pred_dur_b}d)"
-                f"  hi={_hi_log_chain:.2f}%  lo={bull_lo:.2f}%  range={range_bull:.1f}%"
+                f"  hi={bull_hi:.2f}%  lo={bull_lo:.2f}%  range={range_bull:.1f}%"
             )
+
+        chain_day = b_end
+        chain_val = bull_lo
+
+        # ── 다음 박스 lo: 이번 hi * (1 + pullback/100)  눌림폭 ──
+        if i < N - 1:
+            if ref_bull_pullbacks and i < len(ref_bull_pullbacks):
+                pullback = float(ref_bull_pullbacks[i])
+            else:
+                pullback = _BULL_PULLBACK_DEFAULT
+            bull_lo = bull_hi * (1.0 + pullback / 100.0)
+            bull_lo = max(0.01, min(MAX_PRED_LO, bull_lo))
+
     bull_path_rows = []
     for i, spec in enumerate(path_specs):
-        b_start, b_end, bull_hi, bull_lo, hi_day_bull, lo_day_bull = spec
-        chain_day = bottom_day if i == 0 else b_start
-        chain_val = bottom_lo if i == 0 else bull_lo
+        b_start, b_end, bull_hi, bull_lo, hi_day_bull, lo_day_bull, s_chain_day, s_chain_val = spec
         next_hi = path_specs[i + 1][2] if i + 1 < len(path_specs) else None
         path = build_bull_box_day_points(
             coin_id, last, max_cyc,
             b_start, b_end,
             bull_hi, bull_lo,
             hi_day_bull, lo_day_bull,
-            chain_day, chain_val,
+            s_chain_day, s_chain_val,
             i,
             next_box_hi=next_hi,
         )

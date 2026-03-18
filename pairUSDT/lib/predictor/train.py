@@ -71,6 +71,17 @@ def train_box_models(train_df: pd.DataFrame):
         raise ValueError(f"학습 데이터 부족: {n}개 (최소 30개 필요)")
 
     sym_col = "symbol" if "symbol" in df.columns else "meta_symbol"
+    bear_total = int((df[TARGET_PHASE] == 0).sum())
+    bull_total = int((df[TARGET_PHASE] == 1).sum())
+    log.info("학습 샘플 분포(전체): BEAR=%d  BULL=%d", bear_total, bull_total)
+    for group_name, selector in (("BTC", lambda s: str(s).upper() == "BTC"), ("ALT", lambda s: str(s).upper() != "BTC")):
+        sub = df[df[sym_col].apply(selector)]
+        if sub.empty:
+            continue
+        bear_cnt = int((sub[TARGET_PHASE] == 0).sum())
+        bull_cnt = int((sub[TARGET_PHASE] == 1).sum())
+        log.info("학습 샘플 분포(%s): BEAR=%d  BULL=%d  (total=%d)", group_name, bear_cnt, bull_cnt, len(sub))
+
     models_by_group: dict[str, dict] = {}
     metrics_by_group: dict[str, dict] = {}
 
@@ -98,40 +109,46 @@ def train_box_models(train_df: pd.DataFrame):
         ("ALT_BULL", lambda r: str(r[sym_col]).upper() != "BTC" and r[TARGET_PHASE] == 1),
     ):
         sub = df[df.apply(selector, axis=1)]
-        if len(sub) < 10:
-            log.warning("[BoxReg] group=%s 샘플 부족 (%d개) → 스킵", group_name, len(sub))
-            continue
-        if group_name in ("BTC_BEAR", "BTC_BULL"):
-            feat_cols = FEATURE_COLS_BTC_REG
-            reg_params = XGB_REG_PARAMS_BTC
-        else:
-            feat_cols = FEATURE_COLS_BEAR if group_name.endswith("_BEAR") else FEATURE_COLS
-            reg_params = XGB_REG_PARAMS
-        X = sub[feat_cols]
-        models = {}
-        metrics = {}
-        for tgt in [TARGET_HI, TARGET_LO, TARGET_DUR]:
-            y = sub[tgt]
-            X_tr, X_va, y_tr, y_va = train_test_split(X, y, test_size=0.2, random_state=42)
-            mdl = XGBRegressor(**reg_params)
-            mdl.fit(X_tr, y_tr)
-            rmse = np.sqrt(mean_squared_error(y_va, mdl.predict(X_va)))
-            approx_unit = float(np.expm1(rmse))
-            models[tgt] = mdl
-            metrics[tgt] = rmse
-            log.info("  [%s]  [%s] val RMSE = %.4f  (원래단위 오차 ≈ %.2f%%)", group_name, tgt, rmse, approx_unit)
-        sigma = {}
-        for tgt in [TARGET_HI, TARGET_LO, TARGET_DUR]:
-            X_s, X_v, y_s, y_v = train_test_split(sub[feat_cols], sub[tgt], test_size=0.2, random_state=42)
-            resid = y_v.values - models[tgt].predict(X_v)
-            sigma[tgt] = float(np.std(resid))
-        models["sigma"] = sigma
-        log.info("  [%s]  σ 계산 완료: hi=%.4f  lo=%.4f  dur=%.4f", group_name, sigma[TARGET_HI], sigma[TARGET_LO], sigma[TARGET_DUR])
-        models_by_group[group_name] = models
-        metrics_by_group[group_name] = metrics
-        log.info("[BoxReg] group=%s samples=%d", group_name, len(sub))
+        mdl, met = train_box_reg_group(group_name, sub)
+        if mdl is not None:
+            models_by_group[group_name] = mdl
+            metrics_by_group[group_name] = met
 
     return models_by_group, metrics_by_group
+
+
+def train_box_reg_group(group_name: str, sub: pd.DataFrame, min_samples: int = 8):
+    """단일 그룹(BTC_BEAR 등) 회귀 모델 학습. 샘플 부족 시 (None, None) 반환."""
+    if len(sub) < min_samples:
+        log.warning("[BoxReg] group=%s 샘플 부족 (%d개) → 스킵", group_name, len(sub))
+        return None, None
+    if group_name in ("BTC_BEAR", "BTC_BULL"):
+        feat_cols = FEATURE_COLS_BTC_REG
+        reg_params = XGB_REG_PARAMS_BTC
+    else:
+        feat_cols = FEATURE_COLS_BEAR if group_name.endswith("_BEAR") else FEATURE_COLS
+        reg_params = XGB_REG_PARAMS
+    X = sub[feat_cols]
+    models: dict = {}
+    metrics: dict = {}
+    for tgt in [TARGET_HI, TARGET_LO, TARGET_DUR]:
+        y = sub[tgt]
+        X_tr, X_va, y_tr, y_va = train_test_split(X, y, test_size=0.2, random_state=42)
+        mdl = XGBRegressor(**reg_params)
+        mdl.fit(X_tr, y_tr)
+        rmse = float(np.sqrt(mean_squared_error(y_va, mdl.predict(X_va))))
+        models[tgt] = mdl
+        metrics[tgt] = rmse
+        log.info("  [%s]  [%s] val RMSE = %.4f  (원래단위 오차 ≈ %.2f%%)", group_name, tgt, rmse, float(np.expm1(rmse)))
+    sigma = {}
+    for tgt in [TARGET_HI, TARGET_LO, TARGET_DUR]:
+        _, X_v, _, y_v = train_test_split(sub[feat_cols], sub[tgt], test_size=0.2, random_state=42)
+        resid = y_v.values - models[tgt].predict(X_v)
+        sigma[tgt] = float(np.std(resid))
+    models["sigma"] = sigma
+    log.info("  [%s]  σ 계산 완료: hi=%.4f  lo=%.4f  dur=%.4f", group_name, sigma[TARGET_HI], sigma[TARGET_LO], sigma[TARGET_DUR])
+    log.info("[BoxReg] group=%s samples=%d", group_name, len(sub))
+    return models, metrics
 
 
 def print_feature_importance(models_by_group: dict):

@@ -306,13 +306,14 @@ def _build_bear_chain_heuristic(
     active_box_hi: float | None,
     active_box_lo: float | None,
     max_bear_chain: int = MAX_BEAR_CHAIN,
+    ref_bear_ranges: list | None = None,
+    ref_bear_declines: list | None = None,
 ) -> tuple[list, list]:
-    """AI 모델 없을 때 휴리스틱 Bear 체인 (폴백)."""
-    prev_box_hi = active_box_hi if active_box_hi is not None else (float(last["hi"]) if last["hi"] else 100.0)
-    prev_box_lo = active_box_lo if active_box_lo is not None else (float(last["lo"]) if last["lo"] else 50.0)
+    """휴리스틱 Bear 체인. lo→hi 반등폭=ref_bear_ranges, hi→lo 하락률=ref_bear_declines."""
     start_lo = min(float(last["lo"]) if last.get("lo") and np.isfinite(last["lo"]) else cur_val, active_box_lo or 999.0) if active_box_lo else (float(last["lo"]) if last.get("lo") and np.isfinite(last["lo"]) else cur_val)
     bear_chain_day = cur_day
     bear_chain_val = cur_val
+    prev_b_hi = active_box_hi if active_box_hi is not None else (float(last["hi"]) if last.get("hi") else start_lo)
     pred_rows = []
     path_rows = []
     total_days = bottom_day - box_start_x
@@ -330,22 +331,31 @@ def _build_bear_chain_heuristic(
         b_dur = b_end - b_start + 1
         if b_dur < 1:
             break
-        progress = (chain_i + 1) / n_boxes
-        b_lo = start_lo - (start_lo - bottom_lo) * progress
-        b_lo = min(max(b_lo, 0.01), MAX_PRED_LO)
-        b_hi = prev_box_lo * (BEAR_CHAIN_HI_DECAY_MIN ** (chain_i + 1))
+        # lo: 첫 박스=현재저점, 이후=이전박스_hi * (1 + 하락률/100), 마지막=bottom_lo
+        if chain_i == 0:
+            b_lo = min(max(start_lo, 0.01), MAX_PRED_LO)
+        elif chain_i == n_boxes - 1:
+            b_lo = min(max(float(bottom_lo), 0.01), MAX_PRED_LO)
+        else:
+            if ref_bear_declines and (chain_i - 1) < len(ref_bear_declines):
+                decline = float(ref_bear_declines[chain_i - 1])
+            else:
+                _r = BEAR_CHAIN_MAX_RANGE_INIT * (BEAR_CHAIN_RANGE_DECAY_RATE ** (chain_i - 1))
+                decline = -_r / (1.0 + _r / 100.0)
+            b_lo = prev_b_hi * (1.0 + decline / 100.0)
+            b_lo = min(max(b_lo, 0.01), MAX_PRED_LO)
+        # hi: lo * (1 + range_pct/100)
+        if ref_bear_ranges and chain_i < len(ref_bear_ranges):
+            range_pct = float(ref_bear_ranges[chain_i])
+        else:
+            range_pct = BEAR_CHAIN_MAX_RANGE_INIT * (BEAR_CHAIN_RANGE_DECAY_RATE ** chain_i)
+        b_hi = b_lo * (1.0 + range_pct / 100.0)
         b_hi = min(max(b_hi, b_lo * 1.05), MAX_PRED_HI)
-        max_range = BEAR_CHAIN_MAX_RANGE_INIT * (BEAR_CHAIN_RANGE_DECAY_RATE ** chain_i)
-        if (b_hi - b_lo) / b_lo * 100 > max_range:
-            b_lo = b_hi / (1.0 + max_range / 100.0)
-        b_hi, b_lo = clamp_bear_box(b_hi, b_lo, b_end, bottom_day, bottom_lo, prev_box_hi, prev_box_lo, chain_i=chain_i)
+        prev_b_hi = b_hi
         b_lo_day, b_hi_day = _compute_bear_chain_lo_hi_days(b_start, b_end, b_dur, bear_chain_day)
         b_range = _safe_div_pct(b_hi, b_lo) if b_lo > 0 else 0.0
-        b_hi_chg = _safe_div_pct(b_hi, bear_chain_val)
-        b_lo_chg = _safe_div_pct(b_lo, b_hi)
-        b_gain = b_lo - 100.0
         current_chain_idx = next_box_idx + chain_i
-        row = _make_bear_box_db_row(coin_id, last, max_cyc, current_chain_idx, b_start, b_end, b_hi, b_lo, b_hi_day, b_lo_day, b_dur, b_range, b_hi_chg, b_lo_chg, b_gain)
+        row = _make_bear_box_db_row(coin_id, last, max_cyc, current_chain_idx, b_start, b_end, b_hi, b_lo, b_hi_day, b_lo_day, b_dur, b_range, _safe_div_pct(b_hi, bear_chain_val), _safe_div_pct(b_lo, b_hi), b_lo - 100.0)
         pred_rows.append(row)
         path_chunk = build_bear_box_day_points(
             coin_id, last, max_cyc, b_start, b_end, b_hi, b_lo, b_lo_day, b_hi_day,
@@ -356,9 +366,8 @@ def _build_bear_chain_heuristic(
         )
         path_rows.extend(path_chunk)
         bear_chain_day, bear_chain_val = b_end, b_lo
-        prev_box_hi, prev_box_lo = b_hi, b_lo
     if pred_rows and str(last["symbol"]).upper() in {"BTC", "ETH", "XRP"}:
-        log.info("[Bear chain] %s_BEAR/ALT_BEAR 없음 → 휴리스틱 폴백 %d개 박스", last["symbol"], len(pred_rows))
+        log.info("[Bear chain] 휴리스틱 폴백 %d개 박스", len(pred_rows))
     return pred_rows, path_rows
 
 
@@ -379,6 +388,8 @@ def build_bear_chain(
     active_box_hi: float | None = None,
     active_box_lo: float | None = None,
     max_bear_chain: int | None = None,
+    ref_bear_ranges: list | None = None,
+    ref_bear_declines: list | None = None,
 ):
     """Bear 체인 생성. max_bear_chain이 None이면 config MAX_BEAR_CHAIN 사용 (BTC는 예측값으로 전달 가능)."""
     effective_max_bear = max_bear_chain if max_bear_chain is not None else MAX_BEAR_CHAIN
@@ -392,6 +403,8 @@ def build_bear_chain(
             active_box_hi=active_box_hi,
             active_box_lo=active_box_lo,
             max_bear_chain=effective_max_bear,
+            ref_bear_ranges=ref_bear_ranges,
+            ref_bear_declines=ref_bear_declines,
         )
 
     bear_reg_feat_cols = FEATURE_COLS_BTC_REG if group_key == "BTC" else FEATURE_COLS_BEAR
@@ -417,6 +430,8 @@ def build_bear_chain(
         start_lo=start_lo,
         max_pred_hi=MAX_PRED_HI,
         max_pred_lo=MAX_PRED_LO,
+        ref_bear_ranges=ref_bear_ranges,
+        ref_bear_declines=ref_bear_declines,
     )
 
     if group_key == "BTC" and len(pred_rows) > 0:

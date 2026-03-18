@@ -357,6 +357,66 @@ def _predict_one_coin_phase2(conn: sqlite3.Connection, bundle: dict):
                 bear_cur_day = int(last["lo_day"]) if pd.notna(last.get("lo_day")) else int(last["end_x"])
                 bear_cur_val = float(last["lo"]) if last.get("lo") is not None else float(last["hi"])
             bear_box_start_x = bear_cur_day
+        # 이전 사이클(2021) BEAR 박스 데이터 추출
+        _sym = str(last["symbol"]).upper()
+        _bear_2021 = (
+            bundle["df_all"][
+                (bundle["df_all"]["symbol"].str.upper() == _sym)
+                & (bundle["df_all"]["cycle_name"].str.contains("2021", case=False, na=False))
+                & (bundle["df_all"]["phase"] == "BEAR")
+                & (bundle["df_all"]["is_completed"] == 1)
+            ]
+            .sort_values("box_index")
+            .reset_index(drop=True)
+        )
+        # 반등폭: lo → hi within box
+        _ref_ranges = _bear_2021["range_pct"].tolist()
+        # 하락률: 이전박스 hi → 현재박스 lo  (box[i].hi → box[i+1].lo)
+        _ref_declines = []
+        for _i in range(len(_bear_2021) - 1):
+            _curr_hi = float(_bear_2021.iloc[_i]["hi"])
+            _next_lo = float(_bear_2021.iloc[_i + 1]["lo"])
+            _ref_declines.append((_next_lo - _curr_hi) / _curr_hi * 100 if _curr_hi > 0 else -30.0)
+        # 현재 사이클에서 완료된 BEAR 박스 수 = 오프셋
+        _bear_offset = int(
+            bundle["grp"][
+                (bundle["grp"]["phase"] == "BEAR")
+                & (bundle["grp"]["is_completed"] == 1)
+            ].shape[0]
+        )
+        _ref_ranges_offset = _ref_ranges[_bear_offset:] or None
+        _ref_declines_offset = _ref_declines[_bear_offset:] or None
+        log.info("  [%s] BEAR offset=%d ranges=%s declines=%s", _sym, _bear_offset, _ref_ranges_offset, _ref_declines_offset)
+
+        # 이전 사이클(2021) BULL 박스 데이터 추출
+        _bull_2021 = (
+            bundle["df_all"][
+                (bundle["df_all"]["symbol"].str.upper() == _sym)
+                & (bundle["df_all"]["cycle_name"].str.contains("2021", case=False, na=False))
+                & (bundle["df_all"]["phase"] == "BULL")
+                & (bundle["df_all"]["is_completed"] == 1)
+            ]
+            .sort_values("box_index")
+            .reset_index(drop=True)
+        )
+        # 상승폭: lo → hi within box
+        _ref_bull_ranges = _bull_2021["range_pct"].tolist()
+        # 눌림폭: box[i].hi → box[i+1].lo (음수)
+        _ref_bull_pullbacks = []
+        for _i in range(len(_bull_2021) - 1):
+            _curr_hi = float(_bull_2021.iloc[_i]["hi"])
+            _next_lo = float(_bull_2021.iloc[_i + 1]["lo"])
+            _ref_bull_pullbacks.append((_next_lo - _curr_hi) / _curr_hi * 100 if _curr_hi > 0 else -10.0)
+        # 현재 사이클에서 완료된 BULL 박스 수 = 오프셋
+        _bull_offset = int(
+            bundle["grp"][
+                (bundle["grp"]["phase"] == "BULL")
+                & (bundle["grp"]["is_completed"] == 1)
+            ].shape[0]
+        )
+        _ref_bull_ranges_offset = _ref_bull_ranges[_bull_offset:] or None
+        _ref_bull_pullbacks_offset = _ref_bull_pullbacks[_bull_offset:] or None
+        log.info("  [%s] BULL offset=%d ranges=%s pullbacks=%s", _sym, _bull_offset, _ref_bull_ranges_offset, _ref_bull_pullbacks_offset)
         chain_pred_rows, chain_path_rows = build_bear_chain(
             coin_id=coin_id, last=last, max_cyc=max_cyc, next_box_idx=next_box_idx,
             bottom_day=bottom_day, bottom_lo=bottom_lo,
@@ -366,6 +426,8 @@ def _predict_one_coin_phase2(conn: sqlite3.Connection, bundle: dict):
             active_box_hi=active_hi,
             active_box_lo=active_lo,
             max_bear_chain=min(bundle["cycle_prediction"].bear_count, MAX_BEAR_CHAIN) if bundle.get("cycle_prediction") else None,
+            ref_bear_ranges=_ref_ranges_offset,
+            ref_bear_declines=_ref_declines_offset,
         )
         pred_rows.extend(chain_pred_rows)
         # Bear chain 종료점에서 Bull path 연결: 하락→최저점→반등 이 한 줄로 이어지도록
@@ -382,6 +444,8 @@ def _predict_one_coin_phase2(conn: sqlite3.Connection, bundle: dict):
                     bottom_day, bottom_lo, peak_day_pred, peak_hi,
                     pred_hi_bull, pred_lo_bull, pred_dur_bull, ref_lo, cycle_lo,
                     max_bull_chain=min(bundle["cycle_prediction"].bull_count, MAX_BULL_CHAIN) if bundle.get("cycle_prediction") else None,
+                    ref_bull_ranges=_ref_bull_ranges_offset,
+                    ref_bull_pullbacks=_ref_bull_pullbacks_offset,
                 )
                 if bull_chain_rows:
                     pred_rows.pop(0)

@@ -161,6 +161,7 @@ def build_training_pairs(df: pd.DataFrame) -> pd.DataFrame:
                     "meta_coin_id": coin_id,
                     "meta_symbol": curr["symbol"],
                     "meta_cycle": int(cycle_num),
+                    "meta_cycle_name": str(curr.get("cycle_name", "")),
                     "meta_box_index": int(curr["box_index"]),
                 }
             )

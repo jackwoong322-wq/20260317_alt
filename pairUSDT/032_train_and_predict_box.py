@@ -19,6 +19,7 @@ from lib.predictor.data import (
 )
 from lib.predictor.train import (
     train_box_models,
+    train_box_reg_group,
     train_bottom_models,
     print_feature_importance,
 )
@@ -51,15 +52,16 @@ def main():
     train_df = build_training_pairs(df_all)
     log.info("      연속 쌍 수: %d개", len(train_df))
 
-    # BTC 박스 훈련 시 Cycle 2017, 2021, Current 세 개 사이클만 사용
+    # BTC 박스 훈련 시 2021 + Current 사이클만 사용
+    train_df_btc_full = train_df.copy()  # fallback용으로 전체 BTC 쌍 보존
     if not train_df.empty and "meta_cycle_name" in train_df.columns:
         btc_mask = train_df["meta_symbol"].astype(str).str.upper() == "BTC"
         if btc_mask.any():
             cycle_ok = train_df["meta_cycle_name"].astype(str).str.contains(
-                "2017|2021|Current", case=False, na=False
+                "2021|Current", case=False, na=False
             )
             train_df = train_df[~btc_mask | cycle_ok].copy()
-            log.info("      BTC 박스 훈련: 2017/2021/Current 사이클만 사용 → %d개 쌍", len(train_df))
+            log.info("      BTC 박스 훈련: 2021/Current 사이클만 사용 → %d개 쌍", len(train_df))
 
     log.info("[3/7] Bottom 학습 데이터 구성")
     bottom_df = build_bottom_dataset(df_all)
@@ -67,6 +69,22 @@ def main():
 
     log.info("[4/7] XGBoost 박스 모델 학습 (phase + BEAR/BULL별 회귀)")
     models_by_group, metrics_by_group = train_box_models(train_df)
+
+    # BTC_BEAR 스킵 시 → 전 사이클(2021)만으로 fallback 재학습
+    if "BTC_BEAR" not in models_by_group and "meta_cycle_name" in train_df_btc_full.columns:
+        log.info("      [Fallback] BTC_BEAR 스킵 → 2021 사이클만으로 재학습 시도")
+        btc_bear_2021 = train_df_btc_full[
+            (train_df_btc_full["meta_symbol"].astype(str).str.upper() == "BTC")
+            & (train_df_btc_full["meta_cycle_name"].astype(str).str.contains("2021", case=False, na=False))
+            & (train_df_btc_full[TARGET_PHASE] == 0)
+        ]
+        mdl, met = train_box_reg_group("BTC_BEAR", btc_bear_2021)
+        if mdl is not None:
+            models_by_group["BTC_BEAR"] = mdl
+            metrics_by_group["BTC_BEAR"] = met
+            log.info("      [Fallback] BTC_BEAR 2021 사이클 fallback 학습 완료 (%d개)", len(btc_bear_2021))
+        else:
+            log.warning("      [Fallback] BTC_BEAR 2021 사이클도 샘플 부족 → 예측 불가")
 
     log.info("검증 오차(RMSE) / 정확도(Acc) 요약:")
     for grp_name, metrics in metrics_by_group.items():
