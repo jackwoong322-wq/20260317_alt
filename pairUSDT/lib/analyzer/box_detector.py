@@ -43,7 +43,8 @@ def _bull_box_hi_lo(ph2: list, bs: int, be: int):
     lo_day_x = ph2[lo_idx]["x"]
     blo = ph2[lo_idx]["low"]
     hi_idx = bs
-    for k in range(bs, be + 1):
+    hi_end = min(be, bs + 4)  # 박스 진입 후 5일 이내 최고가를 고점으로 확정
+    for k in range(bs, hi_end + 1):
         if ph2[k]["high"] > ph2[hi_idx]["high"]:
             hi_idx = k
     hi_day_x = ph2[hi_idx]["x"]
