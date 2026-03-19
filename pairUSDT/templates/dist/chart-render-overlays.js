@@ -80,6 +80,12 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
     const btcAnchor = getBtcAnchorInfo(cycleNumber);
     const phaseBoxStats = getPhaseBoxStatsForSymbol(coinSymbol, 'BULL'); // BULL/Bear 모두 참고
     const isBtcChart = (coinSymbol || '').toUpperCase() === 'BTC';
+    const peakPrice = cycleRef?.peak_price ?? null;
+    function toDollar(pct) {
+        if (!peakPrice) return null;
+        const val = Math.round(peakPrice * pct / 100);
+        return val >= 1000 ? `$${(val / 1000).toFixed(1)}k` : `$${val}`;
+    }
     if (chartState.showBoxZone && zones.length > 0) {
         zones.forEach((z, zi) => {
             const isBear = z.phase === 'BEAR';
@@ -241,30 +247,30 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             const effectiveBear = isActive ? isActiveBear : isBear;
             const hiDotColor = isPrediction
                 ? effectiveBear
-                    ? '#FF6B6B'
-                    : '#FFD966'
+                    ? '#FF9AB0'
+                    : '#FFD980'
                 : effectiveBear
                     ? '#ff4466'
                     : '#FFB800';
             const hiDotBg = isPrediction
                 ? effectiveBear
-                    ? 'rgba(255,107,107,0.30)'
-                    : 'rgba(255,217,102,0.30)'
+                    ? 'rgba(255,154,176,0.22)'
+                    : 'rgba(255,217,128,0.22)'
                 : effectiveBear
                     ? 'rgba(255,68,102,0.35)'
                     : 'rgba(255,184,0,0.35)';
-            const loDotColor = isPrediction ? '#66FFBB' : '#00ff88';
+            const loDotColor = isPrediction ? '#7AFFC2' : '#00ff88';
             const loDotBg = isPrediction
-                ? 'rgba(102,255,187,0.25)'
+                ? 'rgba(122,255,194,0.20)'
                 : 'rgba(0,255,136,0.25)';
             const hiLblColor = isPrediction
                 ? effectiveBear
-                    ? '#FF6B6B'
-                    : '#FFD966'
+                    ? '#FF9AB0'
+                    : '#FFD980'
                 : effectiveBear
                     ? '#ff6688'
                     : '#FFD700';
-            const loLblColor = isPrediction ? '#66FFBB' : '#00ff88';
+            const loLblColor = isPrediction ? '#7AFFC2' : '#00ff88';
             const scenTag = sStyle ? ' ' + sStyle.tag : '';
             const useDashed = isPrediction || isActive;
             // high dot
@@ -283,7 +289,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                 const chg = hiVsPrevLo !== null
                     ? ` ${parseFloat(hiVsPrevLo) >= 0 ? '+' : ''}${parseFloat(hiVsPrevLo).toFixed(1)}%`
                     : '';
-                hiText = `H${z.boxIndex != null ? z.boxIndex + 1 : zi + 1} ${z.hi.toFixed(1)}%${chg}${scenTag}`;
+                const hiDollar = toDollar(z.hi);
+                hiText = `EH${z.boxIndex != null ? z.boxIndex + 1 : zi + 1} ${z.hi.toFixed(1)}%${hiDollar ? `(${hiDollar})` : ''}${chg}${scenTag}`;
             }
             else {
                 const chg = hiVsPrevLo !== null
@@ -345,7 +352,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                 const chg = loVsPrevHi !== null
                     ? ` ${parseFloat(loVsPrevHi) >= 0 ? '+' : ''}${parseFloat(loVsPrevHi).toFixed(1)}%`
                     : '';
-                loText = `L${z.boxIndex != null ? z.boxIndex + 1 : zi + 1} ${z.lo.toFixed(1)}%${chg}`;
+                const loDollar = toDollar(z.lo);
+                loText = `EL${z.boxIndex != null ? z.boxIndex + 1 : zi + 1} ${z.lo.toFixed(1)}%${loDollar ? `(${loDollar})` : ''}${chg}`;
             }
             else {
                 const chg = loVsPrevHi !== null
@@ -399,33 +407,7 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                     const loChg = loVsPrevHi !== null
                         ? `<span class="${parseFloat(loVsPrevHi) >= 0 ? 'bt-up' : 'bt-down'}">${parseFloat(loVsPrevHi) >= 0 ? '+' : ''}${loVsPrevHi}%</span>`
                         : '<span style="color:#666">-</span>';
-                    let reasonLine = '';
-                    if (isPrediction) {
-                        let btcText = '';
-                        if (btcAnchor) {
-                            const pct = (btcAnchor.progress * 100).toFixed(0);
-                            const riskLabel = btcAnchor.level === 'HIGH'
-                                ? 'High Risk'
-                                : btcAnchor.level === 'MID'
-                                    ? 'Caution'
-                                    : 'Normal';
-                            btcText = `BTC Cycle Pos: ${pct}% (${riskLabel})`;
-                        }
-                        let boxText = '';
-                        if (phaseBoxStats) {
-                            const avgBoxes = phaseBoxStats.avg.toFixed(1);
-                            const curBoxNo = zi + 1;
-                            boxText = `Avg Box Count: ${avgBoxes} / now #${curBoxNo}`;
-                        }
-                        if (isBtcChart) {
-                            boxText =
-                                (boxText ? boxText + ' · ' : '') +
-                                    'Based on BTC Historical Data Only';
-                        }
-                        if (btcText || boxText) {
-                            reasonLine = `<div class="bt-row"><span class="bt-key" style="font-size:9px;opacity:0.7">Reason</span><span class="bt-val" style="font-size:9px;text-align:right;">${btcText}${btcText && boxText ? ' · ' : ''}${boxText}</span></div>`;
-                        }
-                    }
+                    const reasonLine = '';
                     const highRiskCaution = isPrediction && btcAnchor && btcAnchor.level === 'HIGH';
                     let targetLine = '';
                     if (isPrediction) {
@@ -464,7 +446,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                             '</div>' +
                             '<div class="bt-row"><span class="bt-key">고점</span><span class="bt-val">' +
                             z.hi.toFixed(2) +
-                            '%</span>' +
+                            '%' + (toDollar(z.hi) ? `(${toDollar(z.hi)})` : '') +
+                            '</span>' +
                             hiChg +
                             '</div>' +
                             '<div class="bt-row"><span class="bt-key" style="font-size:9px;opacity:0.6">&nbsp;' +
@@ -472,7 +455,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                             '</span></div>' +
                             '<div class="bt-row"><span class="bt-key">저점</span><span class="bt-val">' +
                             z.lo.toFixed(2) +
-                            '%</span>' +
+                            '%' + (toDollar(z.lo) ? `(${toDollar(z.lo)})` : '') +
+                            '</span>' +
                             loChg +
                             '</div>' +
                             '<div class="bt-row"><span class="bt-key" style="font-size:9px;opacity:0.6">&nbsp;' +
