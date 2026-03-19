@@ -209,15 +209,25 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                 !Number.isFinite(loVal)) {
                 return;
             }
-            let rawYHi = series.priceToCoordinate(hiVal);
-            let rawYLo = series.priceToCoordinate(loVal);
-            if (rawYHi === null || rawYLo === null) {
-                const fallbackY = chartHeight / 2;
-                if (rawYHi === null)
-                    rawYHi = rawYLo ?? fallbackY - 20;
-                if (rawYLo === null)
-                    rawYLo = rawYHi ?? fallbackY + 20;
+            // priceToCoordinate: 현재 series가 null 반환 시 다른 series로 fallback
+            function coordY(val) {
+                const y = series.priceToCoordinate(val);
+                if (y !== null) return y;
+                for (const s of Object.values(chartState.seriesMap)) {
+                    if (s === series) continue;
+                    const fy = s.priceToCoordinate(val);
+                    if (fy !== null) return fy;
+                }
+                return null;
             }
+            const rawYHiOrig = coordY(hiVal);
+            const rawYLoOrig = coordY(loVal);
+            // 둘 다 Y 범위 밖이면 건너뜀
+            if (rawYHiOrig === null && rawYLoOrig === null) {
+                return;
+            }
+            let rawYHi = rawYHiOrig ?? rawYLoOrig;
+            let rawYLo = rawYLoOrig ?? rawYHiOrig;
             if (xHi === null || xLo === null || rawYHi === null || rawYLo === null) {
                 return;
             }
@@ -298,11 +308,14 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                 xLabelHi = xHi;
             }
             const pad = 40;
-            xLabelHi = Math.max(pad, Math.min(overlayWidth - pad, xLabelHi));
+            const hiOffScreen = (endPxHi !== null && endPxHi < 0) || (startPxHi !== null && startPxHi > overlayWidth);
+            if (!hiOffScreen) {
+                xLabelHi = Math.max(pad, Math.min(overlayWidth - pad, xLabelHi));
+            }
             lblHi.style.left = xLabelHi + 'px';
             lblHi.style.transform = 'translateX(-50%)';
             const rawTopHi = rawYHi - 18;
-            const visibleHi = rawTopHi >= 0 && rawTopHi <= chartHeight;
+            const visibleHi = !hiOffScreen && rawTopHi >= 0 && rawTopHi <= chartHeight;
             lblHi.style.display = visibleHi ? 'block' : 'none';
             if (visibleHi) {
                 lblHi.style.top = rawTopHi + 'px';
@@ -356,11 +369,14 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             else {
                 xLabelLo = xLo;
             }
-            xLabelLo = Math.max(pad, Math.min(overlayWidth - pad, xLabelLo));
+            const loOffScreen = (endPxLo !== null && endPxLo < 0) || (startPxLo !== null && startPxLo > overlayWidth);
+            if (!loOffScreen) {
+                xLabelLo = Math.max(pad, Math.min(overlayWidth - pad, xLabelLo));
+            }
             lblLo.style.left = xLabelLo + 'px';
             lblLo.style.transform = 'translateX(-50%)';
             const rawTopLo = rawYLo + 6;
-            const visibleLo = rawTopLo >= 0 && rawTopLo <= chartHeight;
+            const visibleLo = !loOffScreen && rawTopLo >= 0 && rawTopLo <= chartHeight;
             lblLo.style.display = visibleLo ? 'block' : 'none';
             if (visibleLo) {
                 lblLo.style.top = rawTopLo + 'px';
