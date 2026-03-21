@@ -38,6 +38,10 @@ CREATE TABLE IF NOT EXISTS coin_analysis_results (
     norm_gain_pct       REAL,
     is_completed        INTEGER DEFAULT 0,
     is_prediction       INTEGER DEFAULT 0,
+    rise_days           INTEGER,
+    decline_days        INTEGER,
+    rise_rate           REAL,
+    decline_intensity   REAL,
     created_at          TEXT    DEFAULT (datetime('now'))
 )
 """
@@ -52,13 +56,24 @@ INSERT INTO coin_analysis_results (
     hi_change_pct, lo_change_pct, gain_pct,
     norm_hi, norm_lo, norm_range_pct, norm_duration,
     norm_hi_change_pct, norm_lo_change_pct, norm_gain_pct,
-    is_completed, is_prediction
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    is_completed, is_prediction,
+    rise_days, decline_days
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 """
 
 
 def setup_db(conn: sqlite3.Connection):
     conn.execute(CREATE_TABLE_SQL)
+    # 기존 테이블 컬럼 마이그레이션
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(coin_analysis_results)")}
+    for col, ddl in [
+        ("rise_days", "INTEGER"),
+        ("decline_days", "INTEGER"),
+        ("rise_rate", "REAL"),
+        ("decline_intensity", "REAL"),
+    ]:
+        if col not in existing:
+            conn.execute(f"ALTER TABLE coin_analysis_results ADD COLUMN {col} {ddl}")
     conn.commit()
     log.info("테이블 coin_analysis_results 준비 완료")
 
@@ -82,6 +97,10 @@ def insert_zones(
         lcp = z.get("lo_change_pct")
         gp = z.get("gain_pct")
 
+        hi_day = z.get("hi_day")
+        lo_day = z.get("lo_day")
+        start_x = z["start_x"]
+
         rows.append(
             (
                 coin_id,
@@ -92,12 +111,12 @@ def insert_zones(
                 zi,
                 z["phase"],
                 z["result"],
-                z["start_x"],
+                start_x,
                 z["end_x"],
                 hi,
                 lo,
-                z.get("hi_day"),
-                z.get("lo_day"),
+                hi_day,
+                lo_day,
                 dur,
                 rp,
                 hcp,
@@ -112,6 +131,8 @@ def insert_zones(
                 signed_log1p(gp) if gp is not None else None,
                 1 if z["result"] != "ACTIVE" else 0,
                 0,
+                None,
+                None,
             )
         )
 
@@ -165,6 +186,51 @@ def load_cycle_data(conn: sqlite3.Connection, coin_id: int) -> dict:
             }
         )
     return cycles
+
+
+def compute_day_metrics(conn: sqlite3.Connection):
+    """모든 박스 INSERT 완료 후 rise_days / decline_days 일괄 계산."""
+    # rise_days: 같은 박스 내 hi_day - lo_day (저점→고점)
+    conn.execute("""
+        UPDATE coin_analysis_results
+        SET rise_days = hi_day - lo_day
+        WHERE hi_day IS NOT NULL AND lo_day IS NOT NULL
+    """)
+
+    # decline_days: 현재 박스 lo_day - 이전 박스 hi_day (이전고점→현재저점)
+    # box_index=0 특수: lo_day 자체 (100%=day0 기준)
+    conn.execute("""
+        UPDATE coin_analysis_results AS r1
+        SET decline_days = CASE
+            WHEN r1.box_index = 0 THEN r1.lo_day
+            ELSE (
+                SELECT r1.lo_day - r2.hi_day
+                FROM coin_analysis_results r2
+                WHERE r2.coin_id = r1.coin_id
+                  AND r2.cycle_number = r1.cycle_number
+                  AND r2.is_prediction = r1.is_prediction
+                  AND r2.box_index = r1.box_index - 1
+                LIMIT 1
+            )
+        END
+        WHERE r1.lo_day IS NOT NULL
+    """)
+    # rise_rate: rise_days / duration (상승일 비율)
+    conn.execute("""
+        UPDATE coin_analysis_results
+        SET rise_rate = CAST(rise_days AS REAL) / duration
+        WHERE rise_days IS NOT NULL AND duration > 0
+    """)
+
+    # decline_intensity: decline_days / rise_days (하락일 / 상승일)
+    conn.execute("""
+        UPDATE coin_analysis_results
+        SET decline_intensity = CAST(decline_days AS REAL) / rise_days
+        WHERE decline_days IS NOT NULL AND rise_days > 0
+    """)
+
+    conn.commit()
+    log.info("rise_days / decline_days / rise_rate / decline_intensity 계산 완료")
 
 
 def print_norm_stats(label: str, values: list):

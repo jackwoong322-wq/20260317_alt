@@ -31,6 +31,8 @@ from lib.predictor.predict_peak import calc_peak_btc, calc_peak_hybrid_for_coin,
 from lib.predictor.predict_paths import rebuild_prediction_paths
 from lib.predictor.predict_schema import CREATE_PATHS_SQL, CREATE_PEAKS_SQL, INSERT_SQL
 from lib.predictor.predict_btc_anchor import calc_btc_anchor
+from lib.predictor.bear_pattern_matcher import match_bear_pattern
+from lib.analyzer.db import compute_day_metrics
 
 log = logging.getLogger(__name__)
 
@@ -377,16 +379,20 @@ def _predict_one_coin_phase2(conn: sqlite3.Connection, bundle: dict):
             _curr_hi = float(_bear_2021.iloc[_i]["hi"])
             _next_lo = float(_bear_2021.iloc[_i + 1]["lo"])
             _ref_declines.append((_next_lo - _curr_hi) / _curr_hi * 100 if _curr_hi > 0 else -30.0)
-        # 현재 사이클에서 완료된 BEAR 박스 수 = 오프셋
-        _bear_offset = int(
+        # 패턴 매칭 오프셋: 마지막 완료 Bear 박스와 전 사이클 유사도 비교
+        _cur_bear_done = (
             bundle["grp"][
                 (bundle["grp"]["phase"] == "BEAR")
                 & (bundle["grp"]["is_completed"] == 1)
-            ].shape[0]
+            ]
+            .sort_values("box_index")
+            .to_dict("records")
         )
+        _ref_bear_list = _bear_2021.to_dict("records")
+        _bear_offset, _match_score = match_bear_pattern(_cur_bear_done, _ref_bear_list)
         _ref_ranges_offset = _ref_ranges[_bear_offset:] or None
         _ref_declines_offset = _ref_declines[_bear_offset:] or None
-        log.info("  [%s] BEAR offset=%d ranges=%s declines=%s", _sym, _bear_offset, _ref_ranges_offset, _ref_declines_offset)
+        log.info("  [%s] BEAR offset=%d (유사도=%.3f) ranges=%s declines=%s", _sym, _bear_offset, _match_score, _ref_ranges_offset, _ref_declines_offset)
 
         # 이전 사이클(2021) BULL 박스 데이터 추출
         _bull_2021 = (
@@ -633,6 +639,7 @@ def _insert_predictions_to_db(conn, pred_rows, path_rows, peak_rows, pred_count,
             peak_rows,
         )
     conn.commit()
+    compute_day_metrics(conn)
     log.info("=" * 72)
     log.info("  예측 저장 완료: 코인 %d개  스킵 %d개  | pred_rows=%d  path_rows=%d", pred_count, skip_count, len(pred_rows), len(path_rows))
     log.info("=" * 72)
