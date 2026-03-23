@@ -140,6 +140,8 @@ def _make_bull_row(
         _signed_log1p(gain_bull),
         0,
         1,
+        None,
+        None,
     )
 
 
