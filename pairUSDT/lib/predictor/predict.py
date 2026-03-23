@@ -390,9 +390,10 @@ def _predict_one_coin_phase2(conn: sqlite3.Connection, bundle: dict):
         )
         _ref_bear_list = _bear_2021.to_dict("records")
         _bear_offset, _match_score = match_bear_pattern(_cur_bear_done, _ref_bear_list)
-        _ref_ranges_offset = _ref_ranges[_bear_offset:] or None
-        _ref_declines_offset = _ref_declines[_bear_offset:] or None
-        log.info("  [%s] BEAR offset=%d (유사도=%.3f) ranges=%s declines=%s", _sym, _bear_offset, _match_score, _ref_ranges_offset, _ref_declines_offset)
+        _simple_offset = len(_cur_bear_done)
+        _ref_ranges_offset = _ref_ranges[_simple_offset:] or None
+        _ref_declines_offset = _ref_declines[_simple_offset:] or None
+        log.info("  [%s] BEAR simple_offset=%d (패턴오프셋=%d 무시) ranges=%s declines=%s", _sym, _simple_offset, _bear_offset, _ref_ranges_offset, _ref_declines_offset)
 
         # 이전 사이클(2021) BULL 박스 데이터 추출
         _bull_2021 = (
