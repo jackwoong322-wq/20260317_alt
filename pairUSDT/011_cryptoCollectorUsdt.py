@@ -33,8 +33,8 @@ if not CC_API_KEY:
 # ── 설정 ──────────────────────────────────────────────
 BINANCE_QUOTE = "USDT"
 CC_QUOTE      = "USD"
-CG_TOP_N      = 10         # CoinGecko 시총 상위 N개
-FINAL_TOP_N   = 1         # 최종 수집 대상
+CG_TOP_N      = 20         # CoinGecko 시총 상위 N개
+FINAL_TOP_N   = 10         # 최종 수집 대상
 CG_DELAY      = 2.5
 BINANCE_DELAY = 0.2
 CC_DELAY      = 0.5
