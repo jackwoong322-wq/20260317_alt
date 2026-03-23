@@ -60,7 +60,8 @@ def load_box_zones(conn: sqlite3.Connection) -> dict:
                start_x, end_x,
                hi, lo, hi_day, lo_day,
                duration, range_pct,
-               is_prediction, is_completed
+               is_prediction, is_completed,
+               rise_days, decline_days
         FROM coin_analysis_results
         ORDER BY coin_id, cycle_number, box_index
         """
@@ -90,6 +91,8 @@ def load_box_zones(conn: sqlite3.Connection) -> dict:
                 "result": row[4],
                 "is_prediction": row[13],
                 "is_completed": row[14],
+                "rise_days": row[15],
+                "decline_days": row[16],
             }
         )
 

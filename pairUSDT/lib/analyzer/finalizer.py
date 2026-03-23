@@ -3,8 +3,9 @@ def finalize_hi_lo_days(zones: list, data: list) -> list:
         if z["phase"] == "BEAR" and z.get("lo_day") is not None:
             best_hi = -float("inf")
             hi_day = z["end_x"]
+            # 저점(lo_day) 이후 구간에서 고점 탐색 (저점→고점 반등 기간 측정용)
             for d in data:
-                if z["start_x"] <= d["x"] <= z["end_x"]:
+                if z["lo_day"] < d["x"] <= z["end_x"]:
                     if d["high"] > best_hi:
                         best_hi = d["high"]
                         hi_day = d["x"]

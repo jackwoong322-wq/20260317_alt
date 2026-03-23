@@ -105,6 +105,8 @@ def _make_bear_row_single(
         _signed_log1p(gain_bear),
         0,
         1,
+        None,
+        None,
     )
 
 
@@ -291,6 +293,8 @@ def _make_bear_box_db_row(
         _signed_log1p(b_gain),
         0,
         1,
+        None,
+        None,
     )
 
 def _build_bear_chain_heuristic(

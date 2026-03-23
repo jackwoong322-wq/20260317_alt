@@ -245,32 +245,13 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             const sKey = isPrediction ? getScenarioKey(z.result) : null;
             const sStyle = sKey ? SCENARIO_STYLE[sKey] : null;
             const effectiveBear = isActive ? isActiveBear : isBear;
-            const hiDotColor = isPrediction
-                ? effectiveBear
-                    ? '#FF9AB0'
-                    : '#FFD980'
-                : effectiveBear
-                    ? '#ff4466'
-                    : '#FFB800';
-            const hiDotBg = isPrediction
-                ? effectiveBear
-                    ? 'rgba(255,154,176,0.22)'
-                    : 'rgba(255,217,128,0.22)'
-                : effectiveBear
-                    ? 'rgba(255,68,102,0.35)'
-                    : 'rgba(255,184,0,0.35)';
-            const loDotColor = isPrediction ? '#7AFFC2' : '#00ff88';
-            const loDotBg = isPrediction
-                ? 'rgba(122,255,194,0.20)'
-                : 'rgba(0,255,136,0.25)';
-            const hiLblColor = isPrediction
-                ? effectiveBear
-                    ? '#FF9AB0'
-                    : '#FFD980'
-                : effectiveBear
-                    ? '#ff6688'
-                    : '#FFD700';
-            const loLblColor = isPrediction ? '#7AFFC2' : '#00ff88';
+            const hiDotColor = effectiveBear ? '#ff4466' : '#FFB800';
+            const hiDotBg = effectiveBear ? 'rgba(255,68,102,0.35)' : 'rgba(255,184,0,0.35)';
+            const loDotColor = '#00ff88';
+            const loDotBg = 'rgba(0,255,136,0.25)';
+            const hiLblColor = effectiveBear ? '#ff6688' : '#FFD700';
+            const loLblColor = '#00ff88';
+            const predOpacity = isPrediction ? '0.55' : '1';
             const scenTag = sStyle ? ' ' + sStyle.tag : '';
             const useDashed = isPrediction || isActive;
             // high dot
@@ -279,24 +260,27 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             dotHi.innerHTML = `<div class="bz-dot" style="background:${hiDotBg};border-color:${hiDotColor};width:9px;height:9px;${useDashed ? 'border-style:dashed;' : ''}"></div>`;
             dotHi.style.left = xHi + 'px';
             dotHi.style.top = (rawYHi ?? 0) + 'px';
+            dotHi.style.opacity = predOpacity;
             overlay.appendChild(dotHi);
             chartState.boxMarkEls.push(dotHi);
             const lblHi = document.createElement('div');
             lblHi.className = 'bz-label' + (isPrediction ? ' prediction' : '');
             lblHi.style.color = hiLblColor;
+            lblHi.style.opacity = predOpacity;
             let hiText;
+            const riseDaysTag = z.rise_days != null ? `(${z.rise_days}d)` : '';
             if (isPrediction) {
                 const chg = hiVsPrevLo !== null
                     ? ` ${parseFloat(hiVsPrevLo) >= 0 ? '+' : ''}${parseFloat(hiVsPrevLo).toFixed(1)}%`
                     : '';
                 const hiDollar = toDollar(z.hi);
-                hiText = `EH${z.boxIndex != null ? z.boxIndex + 1 : zi + 1} ${z.hi.toFixed(1)}%${hiDollar ? `(${hiDollar})` : ''}${chg}${scenTag}`;
+                hiText = `EH${z.boxIndex != null ? z.boxIndex + 1 : zi + 1} ${z.hi.toFixed(1)}%${hiDollar ? `(${hiDollar})` : ''}${chg}${riseDaysTag}${scenTag}`;
             }
             else {
                 const chg = hiVsPrevLo !== null
                     ? ` ${parseFloat(hiVsPrevLo) >= 0 ? '+' : ''}${parseFloat(hiVsPrevLo).toFixed(1)}%`
                     : '';
-                hiText = `H${zi + 1} ${z.hi.toFixed(1)}%${chg}`;
+                hiText = `H${zi + 1} ${z.hi.toFixed(1)}%${chg}${riseDaysTag}`;
             }
             lblHi.textContent = hiText;
             const startPxHi = timeScale.timeToCoordinate(dayToTime(z.startX));
@@ -341,25 +325,28 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             dotLo.innerHTML = `<div class="bz-dot" style="background:${loDotBg};border-color:${loDotColor};width:9px;height:9px;${useDashed ? 'border-style:dashed;' : ''}"></div>`;
             dotLo.style.left = xLo + 'px';
             dotLo.style.top = (rawYLo ?? 0) + 'px';
+            dotLo.style.opacity = predOpacity;
             overlay.appendChild(dotLo);
             chartState.boxMarkEls.push(dotLo);
             // low label
             const lblLo = document.createElement('div');
             lblLo.className = 'bz-label' + (isPrediction ? ' prediction' : '');
             lblLo.style.color = loLblColor;
+            lblLo.style.opacity = predOpacity;
             let loText;
+            const declineDaysTag = z.decline_days != null ? `(${z.decline_days}d)` : '';
             if (isPrediction) {
                 const chg = loVsPrevHi !== null
                     ? ` ${parseFloat(loVsPrevHi) >= 0 ? '+' : ''}${parseFloat(loVsPrevHi).toFixed(1)}%`
                     : '';
                 const loDollar = toDollar(z.lo);
-                loText = `EL${z.boxIndex != null ? z.boxIndex + 1 : zi + 1} ${z.lo.toFixed(1)}%${loDollar ? `(${loDollar})` : ''}${chg}`;
+                loText = `EL${z.boxIndex != null ? z.boxIndex + 1 : zi + 1} ${z.lo.toFixed(1)}%${loDollar ? `(${loDollar})` : ''}${chg}${declineDaysTag}`;
             }
             else {
                 const chg = loVsPrevHi !== null
                     ? ` ${parseFloat(loVsPrevHi) >= 0 ? '+' : ''}${parseFloat(loVsPrevHi).toFixed(1)}%`
                     : '';
-                loText = `L${zi + 1} ${z.lo.toFixed(1)}%${chg}`;
+                loText = `L${zi + 1} ${z.lo.toFixed(1)}%${chg}${declineDaysTag}`;
             }
             lblLo.textContent = loText;
             const startPxLo = timeScale.timeToCoordinate(dayToTime(z.startX));

@@ -18,6 +18,7 @@ from lib.analyzer.finalizer import finalize_hi_lo_days, compute_change_pcts
 from lib.analyzer.db import (
     setup_db,
     insert_zones,
+    compute_day_metrics,
     load_all_coins,
     load_cycle_data,
     print_norm_stats,
@@ -232,6 +233,7 @@ def main():
     print_norm_stats("norm_hi_change_pct", all_norm_hi_chg)
     print_norm_stats("norm_lo_change_pct", all_norm_lo_chg)
     print_norm_stats("norm_gain_pct", all_norm_gain)
+    compute_day_metrics(conn)
     log.info("분석 완료 — %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     conn.close()
