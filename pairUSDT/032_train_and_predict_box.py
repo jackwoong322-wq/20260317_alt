@@ -45,8 +45,8 @@ def main():
     log.info("      총 %d개 박스 (is_prediction=0)", len(df_all))
     
     # 임시: BTC만 사용 (원복 시 아래 두 줄 제거)
-    df_all = df_all[df_all["symbol"].str.upper() == "BTC"].copy()
-    log.info("      (임시) BTC만 사용 — %d개 박스", len(df_all))
+    # df_all = df_all[df_all["symbol"].str.upper() == "BTC"].copy()
+    # log.info("      (임시) BTC만 사용 — %d개 박스", len(df_all))
 
     log.info("[2/7] 연속 박스 쌍 구성")
     train_df = build_training_pairs(df_all)
