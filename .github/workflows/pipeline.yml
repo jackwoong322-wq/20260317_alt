@@ -1,0 +1,80 @@
+name: Crypto Data Pipeline
+
+on:
+  schedule:
+    # 매일 00:00 UTC — 수집 (011, 012)
+    - cron: '0 0 * * *'
+    # 매주 월요일 01:00 UTC — 분석/학습 (021, 031, 032)
+    - cron: '0 1 * * 1'
+  workflow_dispatch:
+    inputs:
+      run_mode:
+        description: 'collect (011+012) | analyze (021+031+032) | all'
+        required: true
+        default: 'all'
+
+env:
+  DB_MODE: supabase
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+  BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
+  BINANCE_SECRET_KEY: ${{ secrets.BINANCE_SECRET_KEY }}
+
+jobs:
+  collect:
+    name: "011+012 데이터 수집"
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'collect' || inputs.run_mode == 'all') ||
+      github.event.schedule == '0 0 * * *'
+    defaults:
+      run:
+        working-directory: pairUSDT
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 패키지 설치
+        run: pip install -r ../requirements.txt supabase
+
+      - name: 011 OHLCV 수집
+        run: python 011_cryptoCollectorUsdt.py
+
+      - name: 012 누락 데이터 업데이트
+        run: python 012_cryptoCollectorUsdt_Update.py
+
+  analyze:
+    name: "021+031+032 분석/학습/예측"
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'analyze' || inputs.run_mode == 'all') ||
+      github.event.schedule == '0 1 * * 1'
+    defaults:
+      run:
+        working-directory: pairUSDT
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 패키지 설치
+        run: pip install -r ../requirements.txt supabase
+
+      - name: 021 사이클 분석
+        run: python 021_altCycleAnalysisUsdt.py
+
+      - name: 031 박스 분석
+        run: python 031_box_analyzer_to_sqlite.py
+
+      - name: 032 학습 및 예측
+        run: python 032_train_and_predict_box.py
+        timeout-minutes: 30
