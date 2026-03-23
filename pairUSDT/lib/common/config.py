@@ -1,9 +1,17 @@
 import logging
+import os
 from pathlib import Path
 
 # pairUSDT 폴더 내 crypto_usdt.db 사용 (실행 위치와 무관)
 _PAIRUSDT_ROOT = Path(__file__).resolve().parents[2]  # pairUSDT
 DB_PATH = str(_PAIRUSDT_ROOT / "crypto_usdt.db")
+
+# DB 모드: sqlite(기본) | supabase
+DB_MODE = os.getenv("DB_MODE", "sqlite")
+
+# Supabase 연결 정보 (DB_MODE=supabase 시 사용)
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 MIN_BOX_DAYS = 5
 BEAR_BREAKOUT_RATIO = 0.98
