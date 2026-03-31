@@ -8,17 +8,16 @@
   - ohlcv 테이블의 코인별 마지막 날짜 조회
   - 마지막 날짜 다음날부터 오늘까지 Binance에서 증분 수집
 
-DB: lib.common.config.DB_PATH (pairUSDT/crypto_usdt.db)
+DB: Supabase (coins, ohlcv)
 """
 
-import sqlite3
 import time
 import logging
 from datetime import datetime, timedelta, timezone
 
 import requests
 
-from lib.common.config import DB_MODE, DB_PATH, SUPABASE_ANON_KEY, SUPABASE_URL
+from lib.common.config import SUPABASE_ANON_KEY, SUPABASE_URL
 
 # ── 설정 ──────────────────────────────────────────────
 BINANCE_QUOTE = "USDT"
@@ -37,42 +36,8 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 # ══════════════════════════════════════════════════════
-# DB
+# DB (Supabase)
 # ══════════════════════════════════════════════════════
-
-
-def init_db(conn: sqlite3.Connection):
-    conn.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS coins (
-            id         TEXT PRIMARY KEY,
-            symbol     TEXT NOT NULL,
-            name       TEXT NOT NULL,
-            rank       INTEGER,
-            updated_at TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS ohlcv (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            coin_id      TEXT    NOT NULL,
-            date         TEXT    NOT NULL,
-            open         REAL    NOT NULL,
-            high         REAL    NOT NULL,
-            low          REAL    NOT NULL,
-            close        REAL    NOT NULL,
-            volume_base  REAL    NOT NULL DEFAULT 0,
-            volume_quote REAL    NOT NULL DEFAULT 0,
-            trade_count  INTEGER NOT NULL DEFAULT 0,
-            source       TEXT,
-            UNIQUE(coin_id, date),
-            FOREIGN KEY (coin_id) REFERENCES coins(id)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_ohlcv_coin_date ON ohlcv(coin_id, date);
-    """
-    )
-    conn.commit()
-    log.info("DB 초기화 완료")
 
 
 def get_supabase_client():
@@ -87,25 +52,9 @@ def get_supabase_client():
     return create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 
-def get_coins_from_db(conn: sqlite3.Connection) -> list[dict]:
-    """coins 테이블에서 전체 코인 목록 조회 (rank 순)"""
-    rows = conn.execute(
-        "SELECT id, symbol, name, rank FROM coins ORDER BY rank"
-    ).fetchall()
-    return [{"id": r[0], "symbol": r[1], "name": r[2], "rank": r[3]} for r in rows]
-
-
 def get_coins_from_supabase(supabase) -> list[dict]:
     res = supabase.table("coins").select("id,symbol,name,rank").order("rank").execute()
     return res.data or []
-
-
-def get_last_date(conn: sqlite3.Connection, coin_id: str) -> str | None:
-    """ohlcv 테이블에서 해당 코인의 가장 마지막 날짜 반환. 데이터 없으면 None."""
-    row = conn.execute(
-        "SELECT MAX(date) FROM ohlcv WHERE coin_id = ?", (coin_id,)
-    ).fetchone()
-    return row[0] if row and row[0] else None
 
 
 def get_last_date_supabase(supabase, coin_id: str) -> str | None:
@@ -228,36 +177,6 @@ def parse_binance_klines(klines: list[list]) -> list[dict]:
 # ══════════════════════════════════════════════════════
 
 
-def save_rows(conn: sqlite3.Connection, coin_id: str, rows: list[dict]) -> int:
-    data = [
-        (
-            coin_id,
-            r["date"],
-            r["open"],
-            r["high"],
-            r["low"],
-            r["close"],
-            r["volume_base"],
-            r["volume_quote"],
-            r["trade_count"],
-            r["source"],
-        )
-        for r in rows
-    ]
-
-    conn.executemany(
-        """
-        INSERT OR IGNORE INTO ohlcv
-            (coin_id, date, open, high, low, close,
-             volume_base, volume_quote, trade_count, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """,
-        data,
-    )
-    conn.commit()
-    return conn.execute("SELECT changes()").fetchone()[0]
-
-
 def save_rows_supabase(supabase, coin_id: str, rows: list[dict]) -> int:
     if not rows:
         return 0
@@ -294,38 +213,21 @@ def save_rows_supabase(supabase, coin_id: str, rows: list[dict]) -> int:
 
 def main():
     today = today_utc()
-    db_mode = (DB_MODE or "sqlite").strip().lower()
 
     log.info("=" * 55)
     log.info("암호화폐 OHLCV 업데이트 시작 (USDT 페어)")
-    log.info(f"  MODE : {db_mode}")
-    if db_mode == "sqlite":
-        log.info(f"  Target: sqlite ({DB_PATH})")
-    else:
-        log.info("  Target: supabase")
+    log.info("  MODE : supabase")
+    log.info("  Target: supabase")
     log.info(f"  오늘 : {today}")
     log.info("=" * 55)
 
-    conn = None
-    supabase = None
-    if db_mode == "sqlite":
-        conn = sqlite3.connect(DB_PATH)
-        init_db(conn)
-    elif db_mode == "supabase":
-        supabase = get_supabase_client()
-    else:
-        raise ValueError(f"지원하지 않는 DB_MODE: {db_mode}")
+    supabase = get_supabase_client()
 
     # ── DB에서 코인 목록 조회 ────────────────────────
-    if db_mode == "sqlite":
-        coins = get_coins_from_db(conn)
-    else:
-        coins = get_coins_from_supabase(supabase)
+    coins = get_coins_from_supabase(supabase)
 
     if not coins:
         log.error("coins 테이블에 데이터가 없습니다. 먼저 코인 목록을 등록하세요.")
-        if conn is not None:
-            conn.close()
         return
 
     log.info(f"\n업데이트 대상: {len(coins)}개 코인\n")
@@ -337,10 +239,7 @@ def main():
     for i, coin in enumerate(coins, 1):
         coin_id = coin["id"]
         symbol = coin["symbol"]
-        if db_mode == "sqlite":
-            last_date = get_last_date(conn, coin_id)
-        else:
-            last_date = get_last_date_supabase(supabase, coin_id)
+        last_date = get_last_date_supabase(supabase, coin_id)
 
         log.info(f"[{i}/{len(coins)}] {symbol} ({coin_id})")
 
@@ -372,20 +271,12 @@ def main():
             skipped += 1
             continue
 
-        if db_mode == "sqlite":
-            saved = save_rows(conn, coin_id, rows)
-        else:
-            saved = save_rows_supabase(supabase, coin_id, rows)
+        saved = save_rows_supabase(supabase, coin_id, rows)
         log.info(f"  +{saved}일치 저장 ({rows[0]['date']} ~ {rows[-1]['date']})")
         updated += 1
 
-    if conn is not None:
-        conn.close()
     log.info("\n" + "=" * 55)
-    if db_mode == "sqlite":
-        log.info(f"업데이트 완료! SQLite 저장: {DB_PATH}")
-    else:
-        log.info("업데이트 완료! Supabase 저장 완료")
+    log.info("업데이트 완료! Supabase 저장 완료")
     log.info(f"  업데이트: {updated}개 코인")
     log.info(f"  건너뜀  : {skipped}개 코인")
     log.info("=" * 55)

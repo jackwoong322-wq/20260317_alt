@@ -13,8 +13,8 @@ load_dotenv(_PAIRUSDT_ROOT / ".env", override=False)
 # pairUSDT 폴더 내 crypto_usdt.db 사용 (실행 위치와 무관)
 DB_PATH = str(_PAIRUSDT_ROOT / "crypto_usdt.db")
 
-# DB 모드: sqlite(기본) | supabase
-DB_MODE = os.getenv("DB_MODE", "sqlite")
+# DB 모드: supabase(기본)
+DB_MODE = os.getenv("DB_MODE", "supabase")
 
 # Supabase 연결 정보 (DB_MODE=supabase 시 사용)
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")

@@ -14,8 +14,6 @@ import numpy as np
 import requests
 
 from lib.common.config import (
-    DB_MODE,
-    DB_PATH,
     SUPABASE_URL,
     SUPABASE_ANON_KEY,
     TARGET_HI,
@@ -296,15 +294,10 @@ def main():
     log.info("=" * 65)
     log.info("032_train_and_predict_box.py 시작")
     log.info("=" * 65)
-    db_mode = (DB_MODE or "sqlite").strip().lower()
-    log.info("실행 모드: %s", db_mode)
-
-    if db_mode == "supabase":
-        conn = sqlite3.connect(":memory:")
-        setup_stage_db_for_supabase(conn)
-        hydrate_stage_db_from_supabase(conn)
-    else:
-        conn = sqlite3.connect(DB_PATH)
+    log.info("실행 모드: supabase")
+    conn = sqlite3.connect(":memory:")
+    setup_stage_db_for_supabase(conn)
+    hydrate_stage_db_from_supabase(conn)
 
     log.info("[1/5] 데이터 로드")
     df_all = load_box_df(conn)
@@ -314,8 +307,7 @@ def main():
         log.warning(
             "학습 대상 박스가 없습니다. (coin_analysis_results is_prediction=0 비어있음)"
         )
-        if db_mode == "supabase":
-            sync_predictions_to_supabase(conn)
+        sync_predictions_to_supabase(conn)
         conn.close()
         log.info("완료 — %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         return
@@ -429,8 +421,7 @@ def main():
     log.info("[7/7] 예측 실행 및 DB 저장")
     predict_and_insert(conn, df_all, train_df, models_by_group, bottom_models, {})
 
-    if db_mode == "supabase":
-        sync_predictions_to_supabase(conn)
+    sync_predictions_to_supabase(conn)
 
     print_prediction_summary(conn)
 
