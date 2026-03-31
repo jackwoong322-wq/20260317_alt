@@ -10,11 +10,10 @@
   1단계 - Binance  → 상장일부터 현재까지 OHLCV
   2단계 - CryptoCompare → Binance 상장 이전 데이터 보완
 
-DB: lib.common.config.DB_PATH (pairUSDT/crypto_usdt.db)
+DB: Supabase (coins, ohlcv)
 """
 
 import os
-import sqlite3
 import time
 import logging
 from datetime import datetime, timezone
@@ -23,7 +22,7 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-from lib.common.config import DB_MODE, DB_PATH, SUPABASE_ANON_KEY, SUPABASE_URL
+from lib.common.config import SUPABASE_ANON_KEY, SUPABASE_URL
 
 # ── .env 로드 ──────────────────────────────────────────
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -71,45 +70,6 @@ log = logging.getLogger(__name__)
 # Suppress verbose HTTP client logs from supabase/httpx internals.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
-
-
-# ══════════════════════════════════════════════════════
-# DB
-# ══════════════════════════════════════════════════════
-
-
-def init_db(conn: sqlite3.Connection):
-    conn.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS coins (
-            id         TEXT PRIMARY KEY,
-            symbol     TEXT NOT NULL,
-            name       TEXT NOT NULL,
-            rank       INTEGER,
-            updated_at TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS ohlcv (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            coin_id      TEXT    NOT NULL,
-            date         TEXT    NOT NULL,
-            open         REAL    NOT NULL,
-            high         REAL    NOT NULL,
-            low          REAL    NOT NULL,
-            close        REAL    NOT NULL,
-            volume_base  REAL    NOT NULL DEFAULT 0,
-            volume_quote REAL    NOT NULL DEFAULT 0,
-            trade_count  INTEGER NOT NULL DEFAULT 0,
-            source       TEXT,
-            UNIQUE(coin_id, date),
-            FOREIGN KEY (coin_id) REFERENCES coins(id)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_ohlcv_coin_date ON ohlcv(coin_id, date);
-    """
-    )
-    conn.commit()
-    log.info("DB 초기화 완료")
 
 
 def get_supabase_client():
@@ -375,55 +335,8 @@ def cc_fetch_before(symbol: str, before_date: str) -> list[dict]:
 
 
 # ══════════════════════════════════════════════════════
-# DB 저장
+# DB 저장 (Supabase)
 # ══════════════════════════════════════════════════════
-
-
-def save_coin_sqlite(conn: sqlite3.Connection, coin: dict):
-    conn.execute(
-        """
-        INSERT OR REPLACE INTO coins (id, symbol, name, rank, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-    """,
-        (
-            coin["id"],
-            coin["symbol"],
-            coin["name"],
-            coin["rank"],
-            datetime.now(tz=timezone.utc).isoformat(),
-        ),
-    )
-    conn.commit()
-
-
-def save_rows_sqlite(conn: sqlite3.Connection, coin_id: str, rows: list[dict]) -> int:
-    data = [
-        (
-            coin_id,
-            r["date"],
-            r["open"],
-            r["high"],
-            r["low"],
-            r["close"],
-            r["volume_base"],
-            r["volume_quote"],
-            r["trade_count"],
-            r["source"],
-        )
-        for r in rows
-    ]
-
-    conn.executemany(
-        """
-        INSERT OR IGNORE INTO ohlcv
-            (coin_id, date, open, high, low, close,
-             volume_base, volume_quote, trade_count, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """,
-        data,
-    )
-    conn.commit()
-    return len(data)
 
 
 def save_coin_supabase(supabase, coin: dict):
@@ -485,29 +398,16 @@ def get_ohlcv_count_supabase(supabase, coin_id: str) -> int:
 
 
 def main():
-    db_mode = (DB_MODE or "sqlite").strip().lower()
-
     log.info("=" * 55)
     log.info("암호화폐 데이터 수집 시작 (USDT 페어)")
-    log.info(f"  DB MODE: {db_mode}")
-    if db_mode == "sqlite":
-        log.info(f"  Target: sqlite ({DB_PATH})")
-    else:
-        log.info("  Target: supabase")
+    log.info("  MODE   : supabase")
+    log.info("  Target : supabase")
     log.info(f"  Step1: CoinGecko 시총 상위 {CG_TOP_N}개")
     log.info(f"  Step2: Binance USDT 상장 필터")
     log.info(f"  Step3: 교집합 상위 {FINAL_TOP_N}개 수집")
     log.info("=" * 55)
 
-    conn = None
-    supabase = None
-    if db_mode == "sqlite":
-        conn = sqlite3.connect(DB_PATH)
-        init_db(conn)
-    elif db_mode == "supabase":
-        supabase = get_supabase_client()
-    else:
-        raise ValueError(f"지원하지 않는 DB_MODE: {db_mode}")
+    supabase = get_supabase_client()
 
     # ── 코인 목록 구성 ───────────────────────────────
     log.info("\n[코인 목록 구성]")
@@ -517,8 +417,6 @@ def main():
 
     if not coins:
         log.error("수집 대상 코인이 없습니다.")
-        if conn is not None:
-            conn.close()
         return
 
     log.info(f"\n수집 대상 목록:")
@@ -533,10 +431,7 @@ def main():
         symbol = coin["symbol"]
 
         log.info(f"[{i}/{len(coins)}] {symbol} ({coin_id})")
-        if db_mode == "sqlite":
-            save_coin_sqlite(conn, coin)
-        else:
-            save_coin_supabase(supabase, coin)
+        save_coin_supabase(supabase, coin)
 
         # 1단계: Binance
         log.info(f"  [1단계] Binance {symbol}USDT 수집 중...")
@@ -544,21 +439,13 @@ def main():
 
         if klines:
             rows = parse_binance_klines(klines)
-            if db_mode == "sqlite":
-                saved = save_rows_sqlite(conn, coin_id, rows)
-                batch_count = 1
-                reflected = saved
-            else:
-                before_cnt = get_ohlcv_count_supabase(supabase, coin_id)
-                saved, batch_count = save_rows_supabase(supabase, coin_id, rows)
-                after_cnt = get_ohlcv_count_supabase(supabase, coin_id)
-                reflected = max(0, after_cnt - before_cnt)
+            before_cnt = get_ohlcv_count_supabase(supabase, coin_id)
+            saved, batch_count = save_rows_supabase(supabase, coin_id, rows)
+            after_cnt = get_ohlcv_count_supabase(supabase, coin_id)
+            reflected = max(0, after_cnt - before_cnt)
             earliest = rows[0]["date"]
-            if db_mode == "sqlite":
-                log.info(f"  Binance: 저장요청 {saved}건 / 배치 {batch_count}")
-            else:
-                log.info(f"  Binance: 요청 {saved}건 / 배치 {batch_count}")
-                log.info(f"  Binance: 실제 반영 {reflected}건 (count delta)")
+            log.info(f"  Binance: 요청 {saved}건 / 배치 {batch_count}")
+            log.info(f"  Binance: 실제 반영 {reflected}건 (count delta)")
             log.info(f"  Binance 최초 일자: {earliest}")
         else:
             log.warning(f"  Binance {symbol}USDT 없음 → 2단계에서 전체 수집")
@@ -574,34 +461,19 @@ def main():
             cc_rows = cc_fetch_before(symbol, before_date=today)
 
         if cc_rows:
-            if db_mode == "sqlite":
-                saved_cc = save_rows_sqlite(conn, coin_id, cc_rows)
-                batch_count_cc = 1
-                reflected_cc = saved_cc
-            else:
-                before_cnt_cc = get_ohlcv_count_supabase(supabase, coin_id)
-                saved_cc, batch_count_cc = save_rows_supabase(
-                    supabase, coin_id, cc_rows
-                )
-                after_cnt_cc = get_ohlcv_count_supabase(supabase, coin_id)
-                reflected_cc = max(0, after_cnt_cc - before_cnt_cc)
+            before_cnt_cc = get_ohlcv_count_supabase(supabase, coin_id)
+            saved_cc, batch_count_cc = save_rows_supabase(supabase, coin_id, cc_rows)
+            after_cnt_cc = get_ohlcv_count_supabase(supabase, coin_id)
+            reflected_cc = max(0, after_cnt_cc - before_cnt_cc)
 
-            if db_mode == "sqlite":
-                log.info(f"  CC 보완: 저장요청 {saved_cc}건 / 배치 {batch_count_cc}")
-            else:
-                log.info(f"  CC 보완: 요청 {saved_cc}건 / 배치 {batch_count_cc}")
-                log.info(f"  CC 보완: 실제 반영 {reflected_cc}건 (count delta)")
+            log.info(f"  CC 보완: 요청 {saved_cc}건 / 배치 {batch_count_cc}")
+            log.info(f"  CC 보완: 실제 반영 {reflected_cc}건 (count delta)")
             log.info(f"  CC 보완 최초 일자: {cc_rows[0]['date']}")
         else:
             log.info(f"  CC 보완 데이터 없음")
 
-    if conn is not None:
-        conn.close()
     log.info("\n" + "=" * 55)
-    if db_mode == "sqlite":
-        log.info(f"수집 완료! SQLite 저장: {DB_PATH}")
-    else:
-        log.info("수집 완료! Supabase 저장 완료")
+    log.info("수집 완료! Supabase 저장 완료")
     log.info("=" * 55)
 
 

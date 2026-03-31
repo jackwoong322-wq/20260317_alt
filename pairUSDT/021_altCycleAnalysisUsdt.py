@@ -1,7 +1,7 @@
 """
 알트코인 4년 주기 사이클 분석기 (USDT 페어)
 
-- 데이터 소스: lib.common.config.DB_PATH (pairUSDT/crypto_usdt.db, ohlcv 테이블, USDT 페어)
+- 데이터 소스: Supabase (ohlcv 테이블, USDT 페어)
 - 결과 저장:
     alt_cycle_data    : 일별 OHLCV (기존)
     alt_cycle_summary : 코인별 사이클 Peak/Low 요약 (신규)
@@ -24,12 +24,11 @@ alt_cycle_summary 구조:
   prev_low_date  / prev_low_price
 """
 
-import sqlite3
 import pandas as pd
 from datetime import datetime, timezone
 import requests
 
-from lib.common.config import DB_MODE, DB_PATH, SUPABASE_ANON_KEY, SUPABASE_URL
+from lib.common.config import SUPABASE_ANON_KEY, SUPABASE_URL
 
 
 def make_cycle_name(peak_ts: int, is_current: bool = False) -> str:
@@ -47,68 +46,6 @@ NEXT_SEARCH_MS = 2 * ONE_YEAR_MS  # Peak 후 다음 탐색 시작: 2년 뒤
 PEAK_DRAWDOWN_RATE = 0.50  # 고점 대비 50% 이상 하락해야 확정
 
 SUPABASE_PAGE_SIZE = 1000
-
-
-# ══════════════════════════════════════════════════════
-# DB 초기화
-# ══════════════════════════════════════════════════════
-
-
-def init_cycle_table(conn: sqlite3.Connection):
-    conn.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS alt_cycle_data (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            coin_id         TEXT    NOT NULL,
-            cycle_number    INTEGER NOT NULL,
-            cycle_name      TEXT,
-            days_since_peak INTEGER NOT NULL,
-            timestamp       TEXT    NOT NULL,
-            close_price     REAL,
-            low_price       REAL,
-            high_price      REAL,
-            close_rate      REAL,
-            low_rate        REAL,
-            high_rate       REAL,
-            peak_date       TEXT,
-            peak_price      REAL,
-            UNIQUE(coin_id, cycle_number, days_since_peak)
-        );
-
-        CREATE TABLE IF NOT EXISTS alt_cycle_summary (
-            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-            coin_id             TEXT    NOT NULL,
-            cycle_number        INTEGER NOT NULL,
-            cycle_name          TEXT,
-
-            -- Peak 정보
-            peak_date           TEXT,
-            peak_price          REAL,
-            peak_pct_from_low   REAL,   -- 직전 저점 대비 +% (from prev low)
-
-            -- Low 정보 (이 Peak ~ 다음 Peak 사이)
-            low_date            TEXT,
-            low_price           REAL,
-            low_pct_from_peak   REAL,   -- 직전 고점 대비 -% (from prev peak)
-
-            -- 직전 Peak/Low 참조
-            prev_peak_date      TEXT,
-            prev_peak_price     REAL,
-            prev_low_date       TEXT,
-            prev_low_price      REAL,
-
-            UNIQUE(coin_id, cycle_number)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_alt_cycle_coin
-            ON alt_cycle_data(coin_id);
-        CREATE INDEX IF NOT EXISTS idx_alt_cycle_coin_cycle
-            ON alt_cycle_data(coin_id, cycle_number);
-        CREATE INDEX IF NOT EXISTS idx_alt_summary_coin
-            ON alt_cycle_summary(coin_id);
-    """
-    )
-    conn.commit()
 
 
 # ══════════════════════════════════════════════════════
@@ -191,31 +128,8 @@ def get_coins_supabase() -> list[tuple[str, str]]:
 
 
 # ══════════════════════════════════════════════════════
-# OHLCV 로드
+# OHLCV 로드 (Supabase)
 # ══════════════════════════════════════════════════════
-
-
-def load_ohlcv(conn: sqlite3.Connection, coin_id: str) -> pd.DataFrame:
-    df = pd.read_sql_query(
-        """
-        SELECT date, high, low, close
-        FROM ohlcv
-        WHERE coin_id = ?
-        ORDER BY date ASC
-    """,
-        conn,
-        params=(coin_id,),
-    )
-
-    if df.empty:
-        return df
-
-    df["timestamp"] = df["date"].apply(date_to_ms)
-    df["close"] = df["close"].astype(float)
-    df["high"] = df["high"].astype(float)
-    df["low"] = df["low"].astype(float)
-
-    return df.reset_index(drop=True)
 
 
 def load_ohlcv_supabase(coin_id: str) -> pd.DataFrame:
@@ -455,62 +369,8 @@ def build_summary(df: pd.DataFrame, peaks: list[tuple]) -> list[dict]:
 
 
 # ══════════════════════════════════════════════════════
-# DB 저장
+# DB 저장 (Supabase)
 # ══════════════════════════════════════════════════════
-
-
-def save_cycle_data(conn: sqlite3.Connection, coin_id: str, records: list[dict]) -> int:
-    conn.execute("DELETE FROM alt_cycle_data WHERE coin_id = ?", (coin_id,))
-    if not records:
-        conn.commit()
-        return 0
-
-    conn.executemany(
-        """
-        INSERT OR REPLACE INTO alt_cycle_data
-            (coin_id, cycle_number, cycle_name, days_since_peak, timestamp,
-             close_price, low_price, high_price,
-             close_rate, low_rate, high_rate,
-             peak_date, peak_price)
-        VALUES
-            (:coin_id, :cycle_number, :cycle_name, :days_since_peak, :timestamp,
-             :close_price, :low_price, :high_price,
-             :close_rate, :low_rate, :high_rate,
-             :peak_date, :peak_price)
-    """,
-        [dict(r, coin_id=coin_id) for r in records],
-    )
-
-    conn.commit()
-    return len(records)
-
-
-def save_summary(conn: sqlite3.Connection, coin_id: str, summaries: list[dict]) -> int:
-    conn.execute("DELETE FROM alt_cycle_summary WHERE coin_id = ?", (coin_id,))
-    if not summaries:
-        conn.commit()
-        return 0
-
-    conn.executemany(
-        """
-        INSERT OR REPLACE INTO alt_cycle_summary
-            (coin_id, cycle_number, cycle_name,
-             peak_date, peak_price, peak_pct_from_low,
-             low_date, low_price, low_pct_from_peak,
-             prev_peak_date, prev_peak_price,
-             prev_low_date, prev_low_price)
-        VALUES
-            (:coin_id, :cycle_number, :cycle_name,
-             :peak_date, :peak_price, :peak_pct_from_low,
-             :low_date, :low_price, :low_pct_from_peak,
-             :prev_peak_date, :prev_peak_price,
-             :prev_low_date, :prev_low_price)
-    """,
-        [dict(s, coin_id=coin_id) for s in summaries],
-    )
-
-    conn.commit()
-    return len(summaries)
 
 
 def delete_by_coin_supabase(table: str, coin_id: str):
@@ -639,28 +499,8 @@ def print_coin_result(summaries: list[dict]):
 
 
 # ══════════════════════════════════════════════════════
-# 요약 출력
+# 요약 출력 (Supabase)
 # ══════════════════════════════════════════════════════
-
-
-def print_summary(conn: sqlite3.Connection):
-    rows = conn.execute(
-        """
-        SELECT coin_id,
-               COUNT(DISTINCT cycle_number) as cycles,
-               MIN(timestamp)               as earliest,
-               MAX(timestamp)               as latest,
-               COUNT(*)                     as total_rows
-        FROM alt_cycle_data
-        GROUP BY coin_id
-        ORDER BY coin_id
-    """
-    ).fetchall()
-
-    print(f"\n{'코인':<20} {'사이클':>6} {'시작':>12} {'끝':>12} {'총행수':>8}")
-    print("-" * 65)
-    for r in rows:
-        print(f"{r[0]:<20} {r[1]:>6} {r[2]:>12} {r[3]:>12} {r[4]:>8}")
 
 
 def print_summary_supabase():
@@ -698,32 +538,20 @@ def print_summary_supabase():
 
 
 def main():
-    db_mode = (DB_MODE or "sqlite").strip().lower()
-
     print("=" * 60)
     print("알트코인 사이클 분석 시작 (USDT 페어)")
-    print(f"  DB MODE    : {db_mode}")
+    print("  DB MODE    : supabase")
     print(f"  Peak 조건 ①: 이후 1년 동안 고점 갱신 없음")
     print(f"  Peak 조건 ②: 고점 대비 {int(PEAK_DRAWDOWN_RATE*100)}% 이상 하락")
     print(f"  다음 탐색  : Peak 이후 3년 뒤부터")
     print("=" * 60)
 
-    conn = None
-    if db_mode == "sqlite":
-        conn = sqlite3.connect(DB_PATH)
-        init_cycle_table(conn)
-        coins = conn.execute("SELECT id, symbol FROM coins ORDER BY rank").fetchall()
-    elif db_mode == "supabase":
-        coins = get_coins_supabase()
-    else:
-        raise ValueError(f"지원하지 않는 DB_MODE: {db_mode}")
+    coins = get_coins_supabase()
 
     if not coins:
         print(
             "[ERROR] coins 테이블 비어있음. crypto_collector_usdt.py 먼저 실행하세요."
         )
-        if conn is not None:
-            conn.close()
         return
 
     print(f"총 {len(coins)}개 코인 분석 시작\n")
@@ -733,10 +561,7 @@ def main():
     for i, (coin_id, symbol) in enumerate(coins, 1):
         print(f"[{i}/{len(coins)}] {symbol} ({coin_id})")
 
-        if db_mode == "sqlite":
-            df = load_ohlcv(conn, coin_id)
-        else:
-            df = load_ohlcv_supabase(coin_id)
+        df = load_ohlcv_supabase(coin_id)
         if df.empty or len(df) < 365:
             print(f"  → 데이터 부족 ({len(df)}일), 건너뜀\n")
             skipped += 1
@@ -794,23 +619,15 @@ def main():
         print(f"  → {len(peaks)}개 사이클, {len(all_records)}행 저장 ✓\n")
 
         # ── DB 저장 ──────────────────────────────────────
-        if db_mode == "sqlite":
-            save_cycle_data(conn, coin_id, all_records)
-            save_summary(conn, coin_id, summaries)
-        else:
-            save_cycle_data_supabase(coin_id, all_records)
-            save_summary_supabase(coin_id, summaries)
+        save_cycle_data_supabase(coin_id, all_records)
+        save_summary_supabase(coin_id, summaries)
         success += 1
 
     print("=" * 60)
     print(f"완료: 성공 {success}개 / Peak없음 {no_peak}개 / 데이터부족 {skipped}개")
     print("=" * 60)
 
-    if db_mode == "sqlite":
-        print_summary(conn)
-        conn.close()
-    else:
-        print_summary_supabase()
+    print_summary_supabase()
 
 
 if __name__ == "__main__":
