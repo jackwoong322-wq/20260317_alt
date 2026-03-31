@@ -2,14 +2,14 @@ name: Crypto Data Pipeline
 
 on:
   schedule:
-    # 매일 00:00 UTC — 수집 (011, 012)
+    # 매일 00:00 UTC — 수집 (012)
     - cron: '0 0 * * *'
     # 매주 월요일 01:00 UTC — 분석/학습 (021, 031, 032)
     - cron: '0 1 * * 1'
   workflow_dispatch:
     inputs:
       run_mode:
-        description: 'collect (011+012) | analyze (021+031+032) | all'
+        description: 'collect (012) | analyze (021+031+032) | all'
         required: true
         default: 'all'
 
