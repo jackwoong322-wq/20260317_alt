@@ -22,7 +22,7 @@ env:
 
 jobs:
   collect:
-    name: "011+012 데이터 수집"
+    name: "012 데이터 업데이트 수집"
     runs-on: ubuntu-latest
     if: |
       github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'collect' || inputs.run_mode == 'all') ||
@@ -41,9 +41,6 @@ jobs:
 
       - name: 패키지 설치
         run: pip install -r ../requirements.txt supabase
-
-      - name: 011 OHLCV 수집
-        run: python 011_cryptoCollectorUsdt.py
 
       - name: 012 누락 데이터 업데이트
         run: python 012_cryptoCollectorUsdt_Update.py
