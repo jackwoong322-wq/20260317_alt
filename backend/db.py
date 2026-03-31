@@ -3,15 +3,16 @@
 import os
 import sqlite3
 
-DB_MODE     = os.getenv("DB_MODE", "sqlite")
+DB_MODE = os.getenv("DB_MODE", "sqlite")
 SQLITE_PATH = os.getenv("SQLITE_PATH", "../pairUSDT/crypto_usdt.db")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 
 
 def get_supabase():
     from supabase import create_client
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+    return create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 
 def get_sqlite():

@@ -1,9 +1,16 @@
 import logging
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+_PAIRUSDT_ROOT = Path(__file__).resolve().parents[2]  # pairUSDT
+_WORKSPACE_ROOT = _PAIRUSDT_ROOT.parent
+
+# 실행 위치와 무관하게 .env 로드
+load_dotenv(_WORKSPACE_ROOT / ".env")
+load_dotenv(_PAIRUSDT_ROOT / ".env", override=False)
 
 # pairUSDT 폴더 내 crypto_usdt.db 사용 (실행 위치와 무관)
-_PAIRUSDT_ROOT = Path(__file__).resolve().parents[2]  # pairUSDT
 DB_PATH = str(_PAIRUSDT_ROOT / "crypto_usdt.db")
 
 # DB 모드: sqlite(기본) | supabase
@@ -11,7 +18,7 @@ DB_MODE = os.getenv("DB_MODE", "sqlite")
 
 # Supabase 연결 정보 (DB_MODE=supabase 시 사용)
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 
 MIN_BOX_DAYS = 5
 BEAR_BREAKOUT_RATIO = 0.98
@@ -22,19 +29,21 @@ BULL_PEAK_LOOKAHEAD = 15
 
 MIN_BEAR_DURATION = 14
 MIN_BULL_DURATION = 14
-MAX_BEAR_CHAIN = 5     # Bear 체인 최대 박스 수 (예측 상한)
-MAX_BULL_CHAIN = 5    # BULL 반등 구간 최대 박스 개수 (과도한 박스 방지)
+MAX_BEAR_CHAIN = 5  # Bear 체인 최대 박스 수 (예측 상한)
+MAX_BULL_CHAIN = 5  # BULL 반등 구간 최대 박스 개수 (과도한 박스 방지)
 MAX_PRED_HI = 299.8
 MAX_PRED_LO = 150.0
 
 # BTC 사이클 박스 수 예측 가드 (선형 회귀 후 보정)
-MIN_BOX_COUNT = 1       # Bear/Bull 박스 수 최솟값
-BEAR_GUARD_DELTA = 1    # Bear: prevCycle.bearCount - BEAR_GUARD_DELTA 이상 유지 (급감 방지)
+MIN_BOX_COUNT = 1  # Bear/Bull 박스 수 최솟값
+BEAR_GUARD_DELTA = (
+    1  # Bear: prevCycle.bearCount - BEAR_GUARD_DELTA 이상 유지 (급감 방지)
+)
 
 # BEAR chain range 발산 억제: chain_i별 range_pct 상한 (단조 감소)
-BEAR_CHAIN_MAX_RANGE_INIT = 32.0   # chain_i=0 상한 (%) — 첫 박스 20~30% 수준
+BEAR_CHAIN_MAX_RANGE_INIT = 32.0  # chain_i=0 상한 (%) — 첫 박스 20~30% 수준
 BEAR_CHAIN_RANGE_DECAY_RATE = 0.96  # 박스당 완만한 감소
-BEAR_CHAIN_HI_DECAY_MIN = 0.97     # 매 박스 hi 최소 감소율 (이전 hi 대비 3% 하락 보장)
+BEAR_CHAIN_HI_DECAY_MIN = 0.97  # 매 박스 hi 최소 감소율 (이전 hi 대비 3% 하락 보장)
 
 # BTC 사이클 가중치: 최근 사이클이 과거 대비 압도적으로 높도록 exp 스케일 강도 (클수록 최근 비중 증가)
 BTC_CYCLE_WEIGHT_EXP_COEF = 2.5
