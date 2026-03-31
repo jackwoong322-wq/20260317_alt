@@ -93,7 +93,9 @@ def _apply_active_box_display_from_first_pred(cycle_zones: list) -> list:
 
 
 def build_json_from_supabase() -> dict:
-    coins_rows = fetch_all_supabase("coins", "id,symbol,name,rank", {"order": "rank.asc"})
+    coins_rows = fetch_all_supabase(
+        "coins", "id,symbol,name,rank", {"order": "rank.asc"}
+    )
     cycle_rows = fetch_all_supabase(
         "alt_cycle_data",
         "coin_id,cycle_number,cycle_name,days_since_peak,close_rate,high_rate,low_rate,peak_date,peak_price,timestamp",
@@ -236,7 +238,9 @@ def build_json_from_supabase() -> dict:
             cycle_data = cycles[cn]
             raw_zones = coin_zones.get(cn, [])
             cycle_zones = _apply_active_box_display_from_first_pred(raw_zones)
-            cycle_paths = path_by_coin_cycle.get(coin_id, {}).get(cn, {"bull": [], "bear": []})
+            cycle_paths = path_by_coin_cycle.get(coin_id, {}).get(
+                cn, {"bull": [], "bear": []}
+            )
             cycle_peaks = peak_by_coin_cycle.get(coin_id, {}).get(cn, [])
             cycles_list.append(
                 {
