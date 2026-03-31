@@ -216,11 +216,21 @@ def apply_day_metrics(rows: list[dict]):
                     if prev_hi is not None:
                         r["decline_days"] = int(lo_day) - int(prev_hi)
 
-            if r.get("duration") and r.get("rise_days") is not None and r["duration"] > 0:
+            if (
+                r.get("duration")
+                and r.get("rise_days") is not None
+                and r["duration"] > 0
+            ):
                 r["rise_rate"] = float(r["rise_days"]) / float(r["duration"])
 
-            if r.get("rise_days") and r["rise_days"] > 0 and r.get("decline_days") is not None:
-                r["decline_intensity"] = float(r["decline_days"]) / float(r["rise_days"])
+            if (
+                r.get("rise_days")
+                and r["rise_days"] > 0
+                and r.get("decline_days") is not None
+            ):
+                r["decline_intensity"] = float(r["decline_days"]) / float(
+                    r["rise_days"]
+                )
 
 
 def _normalize_value(v):
@@ -303,7 +313,9 @@ def main():
                             last_bull["hi"] = corrected_hi
                             last_bull["hi_day"] = last_bull["end_x"]
                             last_bull["range_pct"] = (
-                                abs(corrected_hi - last_bull["lo"]) / last_bull["lo"] * 100
+                                abs(corrected_hi - last_bull["lo"])
+                                / last_bull["lo"]
+                                * 100
                                 if last_bull["lo"] > 0
                                 else 0.0
                             )
