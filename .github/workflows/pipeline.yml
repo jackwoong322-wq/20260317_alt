@@ -73,7 +73,7 @@ jobs:
         run: python 021_altCycleAnalysisUsdt.py
 
       - name: 031 박스 분석
-        run: python 031_box_analyzer_to_sqlite.py
+        run: python 031_box_analyzer_to_supabase.py
 
       - name: 032 학습 및 예측
         run: python 032_train_and_predict_box.py

@@ -7,8 +7,7 @@ BTC/알트 공통: 사이클별 Bear/Bull 박스 수 예측 (선형 회귀 + 가
 - coin_id를 넘기면 해당 코인 완성 사이클 기준, None이면 BTC(symbol) 기준(하위 호환).
 """
 
-import sqlite3
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from lib.common.config import (
     BEAR_GUARD_DELTA,
@@ -20,6 +19,7 @@ from lib.common.config import (
 
 class CyclePrediction(NamedTuple):
     """한 사이클에 대한 Bear/Bull 박스 수 예측 결과 (명세 반환 형식)."""
+
     cycle_number: int
     bear_count: int
     bull_count: int
@@ -32,7 +32,7 @@ METHOD_LINEAR_REGRESSION = "linear_regression"
 
 
 def get_completed_cycle_box_counts(
-    conn: sqlite3.Connection, coin_id: int
+    conn: Any, coin_id: int
 ) -> list[tuple[int, int, int]]:
     """
     is_completed=1인 해당 코인(coin_id) 사이클만 대상으로 cycle_number별 bear_count, bull_count 집계.
@@ -53,7 +53,7 @@ def get_completed_cycle_box_counts(
     return [(int(r[0]), int(r[1]), int(r[2])) for r in rows]
 
 
-def get_btc_completed_cycle_box_counts(conn: sqlite3.Connection) -> list[tuple[int, int, int]]:
+def get_btc_completed_cycle_box_counts(conn: Any) -> list[tuple[int, int, int]]:
     """
     is_completed=1인 BTC 사이클만 대상으로 cycle_number별 bear_count, bull_count 집계.
     반환: [(cycle_number, bear_count, bull_count), ...] 정렬된 리스트.
@@ -117,7 +117,7 @@ def _apply_guards(
 
 
 def predict_cycle_box_counts(
-    conn: sqlite3.Connection,
+    conn: Any,
     target_cycle_number: int,
     coin_id: int | None = None,
 ) -> CyclePrediction | None:
@@ -133,8 +133,12 @@ def predict_cycle_box_counts(
     if len(counts) < 2:
         return None
     max_cyc = max(c[0] for c in counts)
-    prev_bear = next((c[1] for c in counts if c[0] == target_cycle_number - 1), MIN_BOX_COUNT)
-    prev_bull = next((c[2] for c in counts if c[0] == target_cycle_number - 1), MIN_BOX_COUNT)
+    prev_bear = next(
+        (c[1] for c in counts if c[0] == target_cycle_number - 1), MIN_BOX_COUNT
+    )
+    prev_bull = next(
+        (c[2] for c in counts if c[0] == target_cycle_number - 1), MIN_BOX_COUNT
+    )
 
     if target_cycle_number <= max_cyc:
         observed = next((c for c in counts if c[0] == target_cycle_number), None)

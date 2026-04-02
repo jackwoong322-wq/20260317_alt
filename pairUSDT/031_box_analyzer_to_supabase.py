@@ -1,8 +1,8 @@
-"""031_box_analyzer_to_sqlite.py
+"""031_box_analyzer_to_supabase.py
 
 박스권 분석 및 AI 학습용 분석 결과 생성 (Supabase 전용)
 
-Usage: python 031_box_analyzer_to_sqlite.py
+Usage: python 031_box_analyzer_to_supabase.py
 """
 
 import logging
@@ -25,9 +25,7 @@ SUPABASE_PAGE_SIZE = 1000
 
 def get_supabase_headers(include_json: bool = False) -> dict:
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-        raise ValueError(
-            "DB_MODE=supabase 이지만 SUPABASE_URL/SUPABASE_ANON_KEY가 설정되지 않았습니다."
-        )
+        raise ValueError("SUPABASE_URL/SUPABASE_ANON_KEY가 설정되지 않았습니다.")
     headers = {
         "apikey": SUPABASE_ANON_KEY,
         "Authorization": f"Bearer {SUPABASE_ANON_KEY}",

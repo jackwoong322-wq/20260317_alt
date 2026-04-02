@@ -1,13 +1,19 @@
-import sqlite3
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from lib.common.config import FEATURE_COLS, TARGET_HI, TARGET_LO, TARGET_DUR, TARGET_PHASE
+from lib.common.config import (
+    FEATURE_COLS,
+    TARGET_HI,
+    TARGET_LO,
+    TARGET_DUR,
+    TARGET_PHASE,
+)
 from lib.common.utils import _log1p, _signed_log1p
 
 
-def load_box_df(conn: sqlite3.Connection) -> pd.DataFrame:
+def load_box_df(conn: Any) -> pd.DataFrame:
     """coin_analysis_results 실측 데이터 전체 로드."""
     df = pd.read_sql_query(
         """
@@ -35,7 +41,9 @@ def build_cycle_and_coin_stats(df: pd.DataFrame):
 
         idx_min = g["lo"].idxmin()
         row_min = g.loc[idx_min]
-        low_x = int(row_min["lo_day"] if pd.notna(row_min["lo_day"]) else row_min["end_x"])
+        low_x = int(
+            row_min["lo_day"] if pd.notna(row_min["lo_day"]) else row_min["end_x"]
+        )
 
         num_bull = int((g["phase"] == "BULL").sum())
         num_bear = int((g["phase"] == "BEAR").sum())
@@ -74,7 +82,11 @@ def build_cycle_and_coin_stats(df: pd.DataFrame):
             min_lo=float(g["min_lo"].min()),
         )
 
-    phase_counts = df.groupby(["coin_id", "cycle_number", "phase"])["box_index"].max().reset_index()
+    phase_counts = (
+        df.groupby(["coin_id", "cycle_number", "phase"])["box_index"]
+        .max()
+        .reset_index()
+    )
     phase_counts["box_count"] = phase_counts["box_index"] + 1
 
     phase_box_stats = {}
@@ -91,7 +103,9 @@ def build_cycle_and_coin_stats(df: pd.DataFrame):
 
 
 def build_training_pairs(df: pd.DataFrame) -> pd.DataFrame:
-    cycle_stats, coin_stats, phase_box_stats, btc_cycle_max_hi = build_cycle_and_coin_stats(df)
+    cycle_stats, coin_stats, phase_box_stats, btc_cycle_max_hi = (
+        build_cycle_and_coin_stats(df)
+    )
 
     records = []
     for (coin_id, cycle_num), grp in df.groupby(["coin_id", "cycle_number"]):
@@ -110,27 +124,49 @@ def build_training_pairs(df: pd.DataFrame) -> pd.DataFrame:
             cycle_low_pos_ratio = cycle_low_x / total_days if total_days else 0.0
 
             avg_cycle_days = cinfo.get("avg_cycle_days", total_days)
-            cycle_progress_ratio = curr["end_x"] / avg_cycle_days if avg_cycle_days else 0.0
+            cycle_progress_ratio = (
+                curr["end_x"] / avg_cycle_days if avg_cycle_days else 0.0
+            )
 
             mean_lo_prev = cinfo.get("mean_lo", curr["lo"])
             min_lo_prev = cinfo.get("min_lo", curr["lo"])
-            rel_to_prev_cycle_low = (curr["lo"] - min_lo_prev) / abs(min_lo_prev) if min_lo_prev else 0.0
-            rel_to_prev_support_mean = (curr["lo"] - mean_lo_prev) / abs(mean_lo_prev) if mean_lo_prev else 0.0
+            rel_to_prev_cycle_low = (
+                (curr["lo"] - min_lo_prev) / abs(min_lo_prev) if min_lo_prev else 0.0
+            )
+            rel_to_prev_support_mean = (
+                (curr["lo"] - mean_lo_prev) / abs(mean_lo_prev) if mean_lo_prev else 0.0
+            )
 
             phase_label = "BULL" if int(curr["is_bull"]) == 1 else "BEAR"
-            avg_box_cnt = phase_box_stats.get((coin_id, phase_label), curr["box_index"] + 1)
-            phase_box_index_ratio = (curr["box_index"] + 1) / avg_box_cnt if avg_box_cnt else 0.0
+            avg_box_cnt = phase_box_stats.get(
+                (coin_id, phase_label), curr["box_index"] + 1
+            )
+            phase_box_index_ratio = (
+                (curr["box_index"] + 1) / avg_box_cnt if avg_box_cnt else 0.0
+            )
 
             btc_prev_peak_ratio = 0.0
-            if str(curr["symbol"]).upper() == "BTC" and cycle_num > 1 and (cycle_num - 1) in btc_cycle_max_hi:
+            if (
+                str(curr["symbol"]).upper() == "BTC"
+                and cycle_num > 1
+                and (cycle_num - 1) in btc_cycle_max_hi
+            ):
                 prev_hi = btc_cycle_max_hi[cycle_num - 1]
                 if prev_hi and prev_hi > 0:
                     btc_prev_peak_ratio = float(curr["hi"]) / prev_hi
             log_cycle_number = float(np.log(cycle_num + 1))
 
             cycle_min_lo = cstat.get("min_lo") or float(grp["lo"].min())
-            hi_ratio = curr["hi"] / cycle_min_lo if cycle_min_lo > 0 and curr["hi"] > 0 else 1.0
-            lo_ratio = curr["lo"] / cycle_min_lo if cycle_min_lo > 0 and curr["lo"] > 0 else 1.0
+            hi_ratio = (
+                curr["hi"] / cycle_min_lo
+                if cycle_min_lo > 0 and curr["hi"] > 0
+                else 1.0
+            )
+            lo_ratio = (
+                curr["lo"] / cycle_min_lo
+                if cycle_min_lo > 0 and curr["lo"] > 0
+                else 1.0
+            )
             hi_rel_to_cycle_lo = float(np.log(hi_ratio))
             lo_rel_to_cycle_lo = float(np.log(lo_ratio))
 
@@ -170,7 +206,9 @@ def build_training_pairs(df: pd.DataFrame) -> pd.DataFrame:
 
 def build_bottom_dataset(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
-    cycle_stats, coin_stats, phase_box_stats, btc_cycle_max_hi = build_cycle_and_coin_stats(df)
+    cycle_stats, coin_stats, phase_box_stats, btc_cycle_max_hi = (
+        build_cycle_and_coin_stats(df)
+    )
     last_cycle = df.groupby("coin_id")["cycle_number"].max()
 
     for (coin_id, cycle_num), grp in df.groupby(["coin_id", "cycle_number"]):
@@ -181,7 +219,9 @@ def build_bottom_dataset(df: pd.DataFrame) -> pd.DataFrame:
         idx_min = grp["lo"].idxmin()
         row_min = grp.loc[idx_min]
         bottom_lo = float(row_min["lo"])
-        bottom_day = int(row_min["lo_day"] if pd.notna(row_min["lo_day"]) else row_min["end_x"])
+        bottom_day = int(
+            row_min["lo_day"] if pd.notna(row_min["lo_day"]) else row_min["end_x"]
+        )
 
         completed = grp[grp["is_completed"] == 1]
         if completed.empty:
@@ -200,23 +240,37 @@ def build_bottom_dataset(df: pd.DataFrame) -> pd.DataFrame:
 
         mean_lo_prev = cinfo.get("mean_lo", ref["lo"])
         min_lo_prev = cinfo.get("min_lo", ref["lo"])
-        rel_to_prev_cycle_low = (ref["lo"] - min_lo_prev) / abs(min_lo_prev) if min_lo_prev else 0.0
-        rel_to_prev_support_mean = (ref["lo"] - mean_lo_prev) / abs(mean_lo_prev) if mean_lo_prev else 0.0
+        rel_to_prev_cycle_low = (
+            (ref["lo"] - min_lo_prev) / abs(min_lo_prev) if min_lo_prev else 0.0
+        )
+        rel_to_prev_support_mean = (
+            (ref["lo"] - mean_lo_prev) / abs(mean_lo_prev) if mean_lo_prev else 0.0
+        )
 
         phase_label = "BULL" if int(ref["is_bull"]) == 1 else "BEAR"
         avg_box_cnt = phase_box_stats.get((coin_id, phase_label), ref["box_index"] + 1)
-        phase_box_index_ratio = (ref["box_index"] + 1) / avg_box_cnt if avg_box_cnt else 0.0
+        phase_box_index_ratio = (
+            (ref["box_index"] + 1) / avg_box_cnt if avg_box_cnt else 0.0
+        )
 
         btc_prev_peak_ratio = 0.0
-        if str(ref["symbol"]).upper() == "BTC" and cycle_num > 1 and (cycle_num - 1) in btc_cycle_max_hi:
+        if (
+            str(ref["symbol"]).upper() == "BTC"
+            and cycle_num > 1
+            and (cycle_num - 1) in btc_cycle_max_hi
+        ):
             prev_hi = btc_cycle_max_hi[cycle_num - 1]
             if prev_hi and prev_hi > 0 and ref.get("hi"):
                 btc_prev_peak_ratio = float(ref["hi"]) / prev_hi
         log_cycle_number = float(np.log(cycle_num + 1))
 
         cycle_min_lo = cstat.get("min_lo") or float(grp["lo"].min())
-        hi_ratio = ref["hi"] / cycle_min_lo if cycle_min_lo > 0 and ref["hi"] > 0 else 1.0
-        lo_ratio = ref["lo"] / cycle_min_lo if cycle_min_lo > 0 and ref["lo"] > 0 else 1.0
+        hi_ratio = (
+            ref["hi"] / cycle_min_lo if cycle_min_lo > 0 and ref["hi"] > 0 else 1.0
+        )
+        lo_ratio = (
+            ref["lo"] / cycle_min_lo if cycle_min_lo > 0 and ref["lo"] > 0 else 1.0
+        )
         hi_rel_to_cycle_lo = float(np.log(hi_ratio))
         lo_rel_to_cycle_lo = float(np.log(lo_ratio))
 
@@ -252,7 +306,9 @@ def build_bottom_dataset(df: pd.DataFrame) -> pd.DataFrame:
 
 def build_peak_dataset(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
-    cycle_stats, coin_stats, phase_box_stats, btc_cycle_max_hi = build_cycle_and_coin_stats(df)
+    cycle_stats, coin_stats, phase_box_stats, btc_cycle_max_hi = (
+        build_cycle_and_coin_stats(df)
+    )
     last_cycle = df.groupby("coin_id")["cycle_number"].max()
 
     for (coin_id, cycle_num), grp in df.groupby(["coin_id", "cycle_number"]):
@@ -266,7 +322,9 @@ def build_peak_dataset(df: pd.DataFrame) -> pd.DataFrame:
         idx_max = bull_grp["hi"].idxmax()
         row_max = bull_grp.loc[idx_max]
         peak_hi = float(row_max["hi"])
-        peak_day = int(row_max["hi_day"] if pd.notna(row_max["hi_day"]) else row_max["end_x"])
+        peak_day = int(
+            row_max["hi_day"] if pd.notna(row_max["hi_day"]) else row_max["end_x"]
+        )
 
         completed = grp[grp["is_completed"] == 1]
         if completed.empty:
@@ -282,22 +340,36 @@ def build_peak_dataset(df: pd.DataFrame) -> pd.DataFrame:
         cycle_progress_ratio = ref["end_x"] / avg_cycle_days if avg_cycle_days else 0.0
         mean_lo_prev = cinfo.get("mean_lo", ref["lo"])
         min_lo_prev = cinfo.get("min_lo", ref["lo"])
-        rel_to_prev_cycle_low = (ref["lo"] - min_lo_prev) / abs(min_lo_prev) if min_lo_prev else 0.0
-        rel_to_prev_support_mean = (ref["lo"] - mean_lo_prev) / abs(mean_lo_prev) if mean_lo_prev else 0.0
+        rel_to_prev_cycle_low = (
+            (ref["lo"] - min_lo_prev) / abs(min_lo_prev) if min_lo_prev else 0.0
+        )
+        rel_to_prev_support_mean = (
+            (ref["lo"] - mean_lo_prev) / abs(mean_lo_prev) if mean_lo_prev else 0.0
+        )
         phase_label = "BULL" if int(ref["is_bull"]) == 1 else "BEAR"
         avg_box_cnt = phase_box_stats.get((coin_id, phase_label), ref["box_index"] + 1)
-        phase_box_index_ratio = (ref["box_index"] + 1) / avg_box_cnt if avg_box_cnt else 0.0
+        phase_box_index_ratio = (
+            (ref["box_index"] + 1) / avg_box_cnt if avg_box_cnt else 0.0
+        )
 
         btc_prev_peak_ratio = 0.0
-        if str(ref["symbol"]).upper() == "BTC" and cycle_num > 1 and (cycle_num - 1) in btc_cycle_max_hi:
+        if (
+            str(ref["symbol"]).upper() == "BTC"
+            and cycle_num > 1
+            and (cycle_num - 1) in btc_cycle_max_hi
+        ):
             prev_hi = btc_cycle_max_hi[cycle_num - 1]
             if prev_hi and prev_hi > 0 and ref.get("hi"):
                 btc_prev_peak_ratio = float(ref["hi"]) / prev_hi
         log_cycle_number = float(np.log(cycle_num + 1))
 
         cycle_min_lo = cstat.get("min_lo") or float(grp["lo"].min())
-        hi_ratio = ref["hi"] / cycle_min_lo if cycle_min_lo > 0 and ref["hi"] > 0 else 1.0
-        lo_ratio = ref["lo"] / cycle_min_lo if cycle_min_lo > 0 and ref["lo"] > 0 else 1.0
+        hi_ratio = (
+            ref["hi"] / cycle_min_lo if cycle_min_lo > 0 and ref["hi"] > 0 else 1.0
+        )
+        lo_ratio = (
+            ref["lo"] / cycle_min_lo if cycle_min_lo > 0 and ref["lo"] > 0 else 1.0
+        )
         hi_rel_to_cycle_lo = float(np.log(hi_ratio))
         lo_rel_to_cycle_lo = float(np.log(lo_ratio))
 

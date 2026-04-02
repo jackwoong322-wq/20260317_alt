@@ -1,8 +1,8 @@
 # pairUSDT/lib/visualizer/db.py
-import sqlite3
+from typing import Any
 
 
-def load_all_coins(conn: sqlite3.Connection) -> list:
+def load_all_coins(conn: Any) -> list:
     """실측(alt_cycle_data) 또는 박스 분석(coin_analysis_results)이 있는 코인 포함.
     예측 유무와 관계없이 실측만 있어도 차트 대상에 넣기 위함."""
     return conn.execute(
@@ -16,7 +16,7 @@ def load_all_coins(conn: sqlite3.Connection) -> list:
     ).fetchall()
 
 
-def load_cycle_data(conn: sqlite3.Connection, coin_id: int) -> dict:
+def load_cycle_data(conn: Any, coin_id: int) -> dict:
     rows = conn.execute(
         """
         SELECT cycle_number, cycle_name, days_since_peak,
@@ -52,7 +52,7 @@ def load_cycle_data(conn: sqlite3.Connection, coin_id: int) -> dict:
     return cycles
 
 
-def load_box_zones(conn: sqlite3.Connection) -> dict:
+def load_box_zones(conn: Any) -> dict:
     rows = conn.execute(
         """
         SELECT coin_id, cycle_number, box_index,
@@ -121,7 +121,7 @@ def _apply_active_box_display_from_first_pred(cycle_zones: list) -> list:
     return out
 
 
-def load_prediction_paths(conn: sqlite3.Connection) -> dict:
+def load_prediction_paths(conn: Any) -> dict:
     try:
         rows = conn.execute(
             """
@@ -139,12 +139,16 @@ def load_prediction_paths(conn: sqlite3.Connection) -> dict:
             result[coin_id] = {}
         if cycle_num not in result[coin_id]:
             result[coin_id][cycle_num] = {"bull": [], "bear": []}
-        key = scenario.lower() if scenario and scenario.lower() in ("bull", "bear") else "bull"
+        key = (
+            scenario.lower()
+            if scenario and scenario.lower() in ("bull", "bear")
+            else "bull"
+        )
         result[coin_id][cycle_num][key].append({"x": day_x, "value": value})
     return result
 
 
-def load_peak_predictions(conn: sqlite3.Connection) -> dict:
+def load_peak_predictions(conn: Any) -> dict:
     try:
         rows = conn.execute(
             """
@@ -162,20 +166,24 @@ def load_peak_predictions(conn: sqlite3.Connection) -> dict:
             result[coin_id] = {}
         if cycle_num not in result[coin_id]:
             result[coin_id][cycle_num] = []
-        result[coin_id][cycle_num].append({
-            "type": peak_type,
-            "value": value,
-            "day_x": day_x,
-        })
+        result[coin_id][cycle_num].append(
+            {
+                "type": peak_type,
+                "value": value,
+                "day_x": day_x,
+            }
+        )
     return result
 
 
-def build_json(conn: sqlite3.Connection, coins: list) -> dict:
+def build_json(conn: Any, coins: list) -> dict:
     box_zones = load_box_zones(conn)
     pred_paths = load_prediction_paths(conn)
     peak_preds = load_peak_predictions(conn)
 
-    total_bz = sum(len(zones) for coin_zones in box_zones.values() for zones in coin_zones.values())
+    total_bz = sum(
+        len(zones) for coin_zones in box_zones.values() for zones in coin_zones.values()
+    )
     print(
         f"[DB] coin_analysis_results 로드: {total_bz}개 박스 "
         f"({'DB 데이터 사용' if total_bz > 0 else '없음 → JS 폴백'})"

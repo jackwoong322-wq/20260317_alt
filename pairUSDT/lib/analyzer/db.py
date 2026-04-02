@@ -1,5 +1,5 @@
 import logging
-import sqlite3
+from typing import Any
 
 import numpy as np
 
@@ -9,8 +9,8 @@ log = logging.getLogger(__name__)
 
 CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS coin_analysis_results (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    coin_id             INTEGER NOT NULL,
+    id                  BIGINT,
+    coin_id             TEXT    NOT NULL,
     symbol              TEXT    NOT NULL,
     coin_rank           INTEGER,
     cycle_number        INTEGER NOT NULL,
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS coin_analysis_results (
     decline_days        INTEGER,
     rise_rate           REAL,
     decline_intensity   REAL,
-    created_at          TEXT    DEFAULT (datetime('now'))
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 """
 
@@ -62,11 +62,21 @@ INSERT INTO coin_analysis_results (
 """
 
 
-def setup_db(conn: sqlite3.Connection):
-    conn.execute(CREATE_TABLE_SQL)
-    # 기존 테이블 컬럼 마이그레이션
-    existing = {row[1] for row in conn.execute("PRAGMA table_info(coin_analysis_results)")}
+def ensure_analysis_result_columns(conn: Any):
+    try:
+        existing = {
+            row[1]
+            for row in conn.execute(
+                "PRAGMA table_info(coin_analysis_results)"
+            ).fetchall()
+        }
+    except Exception:
+        existing = {
+            row[0] for row in conn.execute("DESCRIBE coin_analysis_results").fetchall()
+        }
     for col, ddl in [
+        ("hi_day", "INTEGER"),
+        ("lo_day", "INTEGER"),
         ("rise_days", "INTEGER"),
         ("decline_days", "INTEGER"),
         ("rise_rate", "REAL"),
@@ -74,13 +84,18 @@ def setup_db(conn: sqlite3.Connection):
     ]:
         if col not in existing:
             conn.execute(f"ALTER TABLE coin_analysis_results ADD COLUMN {col} {ddl}")
+
+
+def setup_db(conn: Any):
+    conn.execute(CREATE_TABLE_SQL)
+    ensure_analysis_result_columns(conn)
     conn.commit()
     log.info("테이블 coin_analysis_results 준비 완료")
 
 
 def insert_zones(
-    conn: sqlite3.Connection,
-    coin_id: int,
+    conn: Any,
+    coin_id: Any,
     symbol: str,
     coin_rank: int,
     cycle_number: int,
@@ -141,7 +156,7 @@ def insert_zones(
     return len(rows)
 
 
-def load_all_coins(conn: sqlite3.Connection) -> list:
+def load_all_coins(conn: Any) -> list:
     return conn.execute(
         """
         SELECT c.id, c.symbol, c.name, c.rank
@@ -152,7 +167,7 @@ def load_all_coins(conn: sqlite3.Connection) -> list:
     ).fetchall()
 
 
-def load_cycle_data(conn: sqlite3.Connection, coin_id: int) -> dict:
+def load_cycle_data(conn: Any, coin_id: Any) -> dict:
     rows = conn.execute(
         """
         SELECT cycle_number, cycle_name, days_since_peak,
@@ -188,18 +203,23 @@ def load_cycle_data(conn: sqlite3.Connection, coin_id: int) -> dict:
     return cycles
 
 
-def compute_day_metrics(conn: sqlite3.Connection):
+def compute_day_metrics(conn: Any):
     """모든 박스 INSERT 완료 후 rise_days / decline_days 일괄 계산."""
+    ensure_analysis_result_columns(conn)
+
     # rise_days: 같은 박스 내 hi_day - lo_day (저점→고점)
-    conn.execute("""
+    conn.execute(
+        """
         UPDATE coin_analysis_results
         SET rise_days = hi_day - lo_day
         WHERE hi_day IS NOT NULL AND lo_day IS NOT NULL
-    """)
+    """
+    )
 
     # decline_days: 현재 박스 lo_day - 이전 박스 hi_day (이전고점→현재저점)
     # box_index=0 특수: lo_day 자체 (100%=day0 기준)
-    conn.execute("""
+    conn.execute(
+        """
         UPDATE coin_analysis_results AS r1
         SET decline_days = CASE
             WHEN r1.box_index = 0 THEN r1.lo_day
@@ -214,20 +234,25 @@ def compute_day_metrics(conn: sqlite3.Connection):
             )
         END
         WHERE r1.lo_day IS NOT NULL
-    """)
+    """
+    )
     # rise_rate: rise_days / duration (상승일 비율)
-    conn.execute("""
+    conn.execute(
+        """
         UPDATE coin_analysis_results
         SET rise_rate = CAST(rise_days AS REAL) / duration
         WHERE rise_days IS NOT NULL AND duration > 0
-    """)
+    """
+    )
 
     # decline_intensity: decline_days / rise_days (하락일 / 상승일)
-    conn.execute("""
+    conn.execute(
+        """
         UPDATE coin_analysis_results
         SET decline_intensity = CAST(decline_days AS REAL) / rise_days
         WHERE decline_days IS NOT NULL AND rise_days > 0
-    """)
+    """
+    )
 
     conn.commit()
     log.info("rise_days / decline_days / rise_rate / decline_intensity 계산 완료")

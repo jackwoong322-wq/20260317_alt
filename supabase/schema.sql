@@ -1,6 +1,6 @@
 -- ============================================================
 -- Supabase / PostgreSQL Schema
--- Migrated from SQLite (crypto_usdt.db)
+-- Source of truth for Supabase database
 -- ============================================================
 
 -- coins

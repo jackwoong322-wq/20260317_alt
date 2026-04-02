@@ -29,7 +29,7 @@ SUPABASE_PAGE_SIZE = 1000
 def get_supabase_headers() -> dict:
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
         raise ValueError(
-            "DB_MODE=supabase 이지만 SUPABASE_URL/SUPABASE_ANON_KEY가 설정되지 않았습니다."
+            "SUPABASE_URL/SUPABASE_ANON_KEY가 설정되지 않았습니다."
         )
     return {
         "apikey": SUPABASE_ANON_KEY,

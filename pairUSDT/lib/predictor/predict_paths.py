@@ -1,11 +1,13 @@
 """Prediction path rebuilding from is_prediction=1 boxes."""
 
-import sqlite3
+from typing import Any
 
 from lib.common.utils import _ease_in_out
 
 
-def _interpolate_segment(start_val: float, end_val: float, start_day: int, end_day: int):
+def _interpolate_segment(
+    start_val: float, end_val: float, start_day: int, end_day: int
+):
     """Interpolate start_day~end_day with _ease_in_out; return (day_x, value) list."""
     if end_day <= start_day:
         return [(int(start_day), float(start_val))]
@@ -18,7 +20,9 @@ def _interpolate_segment(start_val: float, end_val: float, start_day: int, end_d
     return pts
 
 
-def _build_paths_for_cycle(rows, symbol: str, scenario: str, start_val: float | None = None):
+def _build_paths_for_cycle(
+    rows, symbol: str, scenario: str, start_val: float | None = None
+):
     """Build (symbol, scenario, day_x, value) path from prediction boxes."""
     if not rows:
         return []
@@ -81,7 +85,7 @@ def _build_paths_for_cycle(rows, symbol: str, scenario: str, start_val: float | 
     return path
 
 
-def _load_bottom_predictions(conn: sqlite3.Connection) -> dict:
+def _load_bottom_predictions(conn: Any) -> dict:
     """Load (coin_id, cycle_number) -> (bottom_day, bottom_lo) from coin_prediction_peaks."""
     try:
         rows = conn.execute(
@@ -105,7 +109,7 @@ def _load_bottom_predictions(conn: sqlite3.Connection) -> dict:
     return result
 
 
-def rebuild_prediction_paths(conn: sqlite3.Connection):
+def rebuild_prediction_paths(conn: Any):
     """Rebuild coin_prediction_paths from is_prediction=1 boxes using interpolation."""
     cur = conn.cursor()
     cur.execute("DELETE FROM coin_prediction_paths")
@@ -173,7 +177,9 @@ def rebuild_prediction_paths(conn: sqlite3.Connection):
 
             bull_path = []
             if bulls:
-                bull_path = _build_paths_for_cycle(bulls, sym, "bull", start_val=bull_start_val)
+                bull_path = _build_paths_for_cycle(
+                    bulls, sym, "bull", start_val=bull_start_val
+                )
                 # Bull 경로는 예측 Bottom에서 시작
                 # 1) Bear 체인 뒤: Bottom = 마지막 Bear 박스 (lo_day, lo)
                 # 2) Bull만 있을 때: Bottom = coin_prediction_peaks의 BOTTOM
@@ -185,10 +191,21 @@ def rebuild_prediction_paths(conn: sqlite3.Connection):
                         cid_key = int(cid_raw) if cid_raw is not None else 0
                     except (ValueError, TypeError):
                         cid_key = str(cid_raw) if cid_raw is not None else ""
-                    if use_bottom_day is None and (cid_key, cyc) in bottom_by_coin_cycle:
-                        use_bottom_day, use_bottom_lo = bottom_by_coin_cycle[(cid_key, cyc)]
-                    if use_bottom_day is not None and use_bottom_lo is not None and first_day > use_bottom_day:
-                        bull_path = [(sym, "bull", use_bottom_day, use_bottom_lo)] + bull_path
+                    if (
+                        use_bottom_day is None
+                        and (cid_key, cyc) in bottom_by_coin_cycle
+                    ):
+                        use_bottom_day, use_bottom_lo = bottom_by_coin_cycle[
+                            (cid_key, cyc)
+                        ]
+                    if (
+                        use_bottom_day is not None
+                        and use_bottom_lo is not None
+                        and first_day > use_bottom_day
+                    ):
+                        bull_path = [
+                            (sym, "bull", use_bottom_day, use_bottom_lo)
+                        ] + bull_path
 
             for scenario, path in (("bear", bear_path), ("bull", bull_path)):
                 if not path:

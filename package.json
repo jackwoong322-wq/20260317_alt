@@ -13,9 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/open": "^6.1.0",
-    "better-sqlite3": "^12.6.2",
     "open": "^11.0.0"
   },
   "devDependencies": {
