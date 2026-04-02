@@ -2,11 +2,12 @@ services:
   - type: web
     name: cryptochart-api
     runtime: python
+    rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: SUPABASE_URL
-        fromSecret: SUPABASE_URL
+        sync: false
       - key: SUPABASE_KEY
-        fromSecret: SUPABASE_KEY
+        sync: false

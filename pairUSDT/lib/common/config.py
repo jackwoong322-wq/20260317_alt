@@ -10,13 +10,7 @@ _WORKSPACE_ROOT = _PAIRUSDT_ROOT.parent
 load_dotenv(_WORKSPACE_ROOT / ".env")
 load_dotenv(_PAIRUSDT_ROOT / ".env", override=False)
 
-# pairUSDT 폴더 내 crypto_usdt.db 사용 (실행 위치와 무관)
-DB_PATH = str(_PAIRUSDT_ROOT / "crypto_usdt.db")
-
-# DB 모드: supabase(기본)
-DB_MODE = os.getenv("DB_MODE", "supabase")
-
-# Supabase 연결 정보 (DB_MODE=supabase 시 사용)
+# Supabase 연결 정보
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 

@@ -7,10 +7,12 @@ Usage: python 032_train_and_predict_box.py
 
 import logging
 import math
-import sqlite3
+from typing import Any
 from datetime import datetime
 
+import duckdb
 import numpy as np
+import pandas as pd
 import requests
 
 from lib.common.config import (
@@ -36,8 +38,8 @@ from lib.predictor.train import (
 from lib.predictor.predict import (
     CREATE_PATHS_SQL,
     CREATE_PEAKS_SQL,
-    predict_and_insert,
-    print_prediction_summary,
+    predict_outputs,
+    print_prediction_summary_rows,
 )
 
 log = logging.getLogger(__name__)
@@ -59,9 +61,7 @@ def _normalize_rows(rows: list[dict]) -> list[dict]:
 
 def get_supabase_headers(include_json: bool = False) -> dict:
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-        raise ValueError(
-            "DB_MODE=supabase 이지만 SUPABASE_URL/SUPABASE_ANON_KEY가 설정되지 않았습니다."
-        )
+        raise ValueError("SUPABASE_URL/SUPABASE_ANON_KEY가 설정되지 않았습니다.")
     headers = {
         "apikey": SUPABASE_ANON_KEY,
         "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
@@ -105,18 +105,23 @@ def fetch_all_supabase(
     return rows
 
 
-def setup_stage_db_for_supabase(conn: sqlite3.Connection):
+def setup_stage_db_for_supabase(conn: Any):
     setup_db(conn)
     conn.execute(CREATE_PATHS_SQL)
     conn.execute(CREATE_PEAKS_SQL)
     conn.commit()
 
 
-def _insert_dict_rows(conn: sqlite3.Connection, table: str, rows: list[dict]):
+def _insert_dict_rows(conn: Any, table: str, rows: list[dict]):
     if not rows:
         return
 
-    valid_cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+    try:
+        valid_cols = [
+            r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()
+        ]
+    except Exception:
+        valid_cols = [r[0] for r in conn.execute(f"DESCRIBE {table}").fetchall()]
     cols = [c for c in valid_cols if any(c in row for row in rows)]
     if not cols:
         return
@@ -128,7 +133,7 @@ def _insert_dict_rows(conn: sqlite3.Connection, table: str, rows: list[dict]):
     conn.commit()
 
 
-def hydrate_stage_db_from_supabase(conn: sqlite3.Connection):
+def hydrate_stage_db_from_supabase(conn: Any):
     box_rows = fetch_all_supabase(
         "coin_analysis_results",
         "*",
@@ -161,10 +166,8 @@ def _post_rows_supabase(table: str, rows: list[dict]):
             )
 
 
-def sync_predictions_to_supabase(conn: sqlite3.Connection):
+def reset_predictions_supabase():
     headers = {**get_supabase_headers(include_json=True), "Prefer": "return=minimal"}
-
-    # 기존 예측 산출물 삭제
     requests.delete(
         f"{SUPABASE_URL}/rest/v1/coin_analysis_results",
         params={"is_prediction": "eq.1"},
@@ -183,8 +186,11 @@ def sync_predictions_to_supabase(conn: sqlite3.Connection):
         headers=headers,
         timeout=60,
     ).raise_for_status()
+    log.info("Supabase 예측 테이블 초기화 완료")
 
-    pred_rows = [
+
+def _prediction_rows_to_dicts(rows: list[tuple]) -> list[dict]:
+    return [
         {
             "coin_id": r[0],
             "symbol": r[1],
@@ -216,29 +222,15 @@ def sync_predictions_to_supabase(conn: sqlite3.Connection):
             "is_prediction": r[27],
             "rise_days": r[28],
             "decline_days": r[29],
-            "rise_rate": r[30],
-            "decline_intensity": r[31],
+            "rise_rate": None,
+            "decline_intensity": None,
         }
-        for r in conn.execute(
-            """
-            SELECT coin_id, symbol, coin_rank,
-                   cycle_number, cycle_name,
-                   box_index, phase, result,
-                   start_x, end_x, hi, lo, hi_day, lo_day,
-                   duration, range_pct,
-                   hi_change_pct, lo_change_pct, gain_pct,
-                   norm_hi, norm_lo, norm_range_pct, norm_duration,
-                   norm_hi_change_pct, norm_lo_change_pct, norm_gain_pct,
-                   is_completed, is_prediction,
-                   rise_days, decline_days, rise_rate, decline_intensity
-            FROM coin_analysis_results
-            WHERE is_prediction = 1
-            ORDER BY coin_id, cycle_number, box_index
-            """
-        ).fetchall()
+        for r in rows
     ]
 
-    path_rows = [
+
+def _path_rows_to_dicts(rows: list[tuple]) -> list[dict]:
+    return [
         {
             "coin_id": r[0],
             "symbol": r[1],
@@ -249,16 +241,12 @@ def sync_predictions_to_supabase(conn: sqlite3.Connection):
             "day_x": r[6],
             "value": r[7],
         }
-        for r in conn.execute(
-            """
-            SELECT coin_id, symbol, cycle_number, scenario, start_x, end_x, day_x, value
-            FROM coin_prediction_paths
-            ORDER BY coin_id, cycle_number, day_x
-            """
-        ).fetchall()
+        for r in rows
     ]
 
-    peak_rows = [
+
+def _peak_rows_to_dicts(rows: list[tuple]) -> list[dict]:
+    return [
         {
             "coin_id": r[0],
             "symbol": r[1],
@@ -269,25 +257,27 @@ def sync_predictions_to_supabase(conn: sqlite3.Connection):
             "predicted_value": r[6],
             "predicted_day": r[7],
         }
-        for r in conn.execute(
-            """
-            SELECT coin_id, symbol, coin_rank, cycle_number, cycle_name,
-                   peak_type, predicted_value, predicted_day
-            FROM coin_prediction_peaks
-            ORDER BY coin_id, cycle_number, peak_type
-            """
-        ).fetchall()
+        for r in rows
     ]
 
-    _post_rows_supabase("coin_analysis_results", pred_rows)
-    _post_rows_supabase("coin_prediction_paths", path_rows)
-    _post_rows_supabase("coin_prediction_peaks", peak_rows)
-    log.info(
-        "Supabase 예측 동기화 완료: pred=%d, paths=%d, peaks=%d",
-        len(pred_rows),
-        len(path_rows),
-        len(peak_rows),
-    )
+
+def sync_predictions_to_supabase(
+    pred_rows: list[tuple], path_rows: list[tuple], peak_rows: list[tuple]
+):
+    pred_dicts = _prediction_rows_to_dicts(pred_rows)
+    path_dicts = _path_rows_to_dicts(path_rows)
+    peak_dicts = _peak_rows_to_dicts(peak_rows)
+
+    _post_rows_supabase("coin_analysis_results", pred_dicts)
+    log.info("coin_analysis_results 저장 완료: %d행", len(pred_dicts))
+
+    _post_rows_supabase("coin_prediction_paths", path_dicts)
+    log.info("coin_prediction_paths 저장 완료: %d행", len(path_dicts))
+
+    _post_rows_supabase("coin_prediction_peaks", peak_dicts)
+    log.info("coin_prediction_peaks 저장 완료: %d행", len(peak_dicts))
+
+    return pred_dicts
 
 
 def main():
@@ -295,7 +285,8 @@ def main():
     log.info("032_train_and_predict_box.py 시작")
     log.info("=" * 65)
     log.info("실행 모드: supabase")
-    conn = sqlite3.connect(":memory:")
+    reset_predictions_supabase()
+    conn = duckdb.connect(database=":memory:")
     setup_stage_db_for_supabase(conn)
     hydrate_stage_db_from_supabase(conn)
 
@@ -307,10 +298,12 @@ def main():
         log.warning(
             "학습 대상 박스가 없습니다. (coin_analysis_results is_prediction=0 비어있음)"
         )
-        sync_predictions_to_supabase(conn)
         conn.close()
         log.info("완료 — %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         return
+
+    df_all = df_all.copy()
+    df_all["coin_id"] = df_all["coin_id"].astype(str)
 
     # 임시: BTC만 사용 (원복 시 아래 두 줄 제거)
     # df_all = df_all[df_all["symbol"].str.upper() == "BTC"].copy()
@@ -418,12 +411,22 @@ def main():
     conn.execute("DELETE FROM coin_prediction_peaks")
     conn.commit()
 
-    log.info("[7/7] 예측 실행 및 DB 저장")
-    predict_and_insert(conn, df_all, train_df, models_by_group, bottom_models, {})
+    log.info("[7/7] 예측 실행")
+    pred_rows, path_rows, peak_rows, pred_count, skip_count = predict_outputs(
+        conn, df_all, train_df, models_by_group, bottom_models, {}
+    )
+    log.info(
+        "예측 생성 완료: 코인 %d개  스킵 %d개  | pred_rows=%d  path_rows=%d  peak_rows=%d",
+        pred_count,
+        skip_count,
+        len(pred_rows),
+        len(path_rows),
+        len(peak_rows),
+    )
 
-    sync_predictions_to_supabase(conn)
+    pred_dicts = sync_predictions_to_supabase(pred_rows, path_rows, peak_rows)
 
-    print_prediction_summary(conn)
+    print_prediction_summary_rows(pred_dicts)
 
     conn.close()
     log.info("완료 — %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))

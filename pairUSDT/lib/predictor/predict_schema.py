@@ -17,7 +17,7 @@ INSERT INTO coin_analysis_results (
 
 CREATE_PATHS_SQL = """
 CREATE TABLE IF NOT EXISTS coin_prediction_paths (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    id           BIGINT,
     coin_id      TEXT,
     symbol       TEXT,
     cycle_number INTEGER,
@@ -26,13 +26,13 @@ CREATE TABLE IF NOT EXISTS coin_prediction_paths (
     end_x        INTEGER,
     day_x        INTEGER,
     value        REAL,
-    created_at   TEXT DEFAULT (datetime('now'))
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 """
 
 CREATE_PEAKS_SQL = """
 CREATE TABLE IF NOT EXISTS coin_prediction_peaks (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    id              BIGINT,
     coin_id         TEXT    NOT NULL,
     symbol          TEXT    NOT NULL,
     coin_rank       INTEGER,
@@ -41,6 +41,6 @@ CREATE TABLE IF NOT EXISTS coin_prediction_peaks (
     peak_type       TEXT    NOT NULL,
     predicted_value REAL    NOT NULL,
     predicted_day   INTEGER,
-    created_at      TEXT DEFAULT (datetime('now'))
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 """

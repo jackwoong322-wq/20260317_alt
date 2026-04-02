@@ -43,7 +43,7 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 def get_supabase_client():
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
         raise ValueError(
-            "DB_MODE=supabase 이지만 SUPABASE_URL/SUPABASE_ANON_KEY가 설정되지 않았습니다."
+            "SUPABASE_URL/SUPABASE_ANON_KEY가 설정되지 않았습니다."
         )
     try:
         from supabase import create_client

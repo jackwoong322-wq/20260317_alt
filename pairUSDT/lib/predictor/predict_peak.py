@@ -1,7 +1,7 @@
 """Peak (high point) prediction for BULL phase."""
 
-import sqlite3
 import logging
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -11,7 +11,7 @@ from lib.common.config import BTC_CYCLE_WEIGHT_EXP_COEF, MAX_PRED_HI
 log = logging.getLogger(__name__)
 
 
-def compute_cross_coin_peak_ratio(conn: sqlite3.Connection) -> float | None:
+def compute_cross_coin_peak_ratio(conn: Any) -> float | None:
     """Compute cross-coin peak reduction median from coin_analysis_results."""
     try:
         df = pd.read_sql_query(
@@ -70,7 +70,8 @@ def compute_cross_coin_peak_ratio(conn: sqlite3.Connection) -> float | None:
     cross_median = 0.7504
     log.info(
         "[Peak] cross_median (완성 사이클 감소율 중앙값) = %.4f  (coins=%d)",
-        cross_median, len(coin_ratios),
+        cross_median,
+        len(coin_ratios),
     )
     return cross_median
 
@@ -108,9 +109,19 @@ def _compute_btc_peak_from_hist(btc_hist_peak: pd.DataFrame, last: pd.Series):
         for cn, _, _ in cyc_hi_rows
     ]
     day_w_sum = sum(day_weights)
-    peak_day_pred = int(round(sum(w * row[2] for row, w in zip(cyc_hi_rows, day_weights)) / day_w_sum))
+    peak_day_pred = int(
+        round(sum(w * row[2] for row, w in zip(cyc_hi_rows, day_weights)) / day_w_sum)
+    )
     peak_day_pred = max(peak_day_pred, int(last["end_x"]) + 2)
-    return peak_hi, peak_day_pred, cyc_hi_rows, weights, weighted_avg_ratio, peak_hi, len(cyc_hi_rows)
+    return (
+        peak_hi,
+        peak_day_pred,
+        cyc_hi_rows,
+        weights,
+        weighted_avg_ratio,
+        peak_hi,
+        len(cyc_hi_rows),
+    )
 
 
 def calc_peak_hybrid_for_coin(
@@ -122,17 +133,17 @@ def calc_peak_hybrid_for_coin(
     label: str,
 ):
     """Compute hybrid peak_hi for a coin (self_ratio + cross_median)."""
-    hist = (
-        df_all[
-            (df_all["coin_id"] == coin_id)
-            & (df_all["cycle_number"] < max_cyc)
-            & (df_all["phase"] == "BULL")
-        ].sort_values(["cycle_number", "box_index"])
-    )
+    hist = df_all[
+        (df_all["coin_id"] == coin_id)
+        & (df_all["cycle_number"] < max_cyc)
+        & (df_all["phase"] == "BULL")
+    ].sort_values(["cycle_number", "box_index"])
     if hist.empty:
         return None, None
 
-    peak_self, peak_day_pred, cyc_hi_rows, _, self_ratio, _, _ = _compute_btc_peak_from_hist(hist, last)
+    peak_self, peak_day_pred, cyc_hi_rows, _, self_ratio, _, _ = (
+        _compute_btc_peak_from_hist(hist, last)
+    )
     if self_ratio is None or not cyc_hi_rows:
         return peak_self, peak_day_pred
 
@@ -149,15 +160,27 @@ def calc_peak_hybrid_for_coin(
     print(
         f"\n[{label}] self_ratio={float(self_ratio):.4f}  cross_median={cm:.4f}  final_ratio={final_ratio:.4f}"
     )
-    print(f"  → peak_hi = {last_hi:.2f}% × {final_ratio:.4f} = {peak_hi:.2f}%  (cycle {max_cyc}, symbol={sym})")
+    print(
+        f"  → peak_hi = {last_hi:.2f}% × {final_ratio:.4f} = {peak_hi:.2f}%  (cycle {max_cyc}, symbol={sym})"
+    )
     return peak_hi, peak_day_pred
 
 
-def calc_peak_btc(df_all: pd.DataFrame, max_cyc: int, last: pd.Series, coin_id: int, cross_median: float | None):
-    return calc_peak_hybrid_for_coin(df_all, coin_id, max_cyc, last, cross_median, label="BTC")
+def calc_peak_btc(
+    df_all: pd.DataFrame,
+    max_cyc: int,
+    last: pd.Series,
+    coin_id: int,
+    cross_median: float | None,
+):
+    return calc_peak_hybrid_for_coin(
+        df_all, coin_id, max_cyc, last, cross_median, label="BTC"
+    )
 
 
-def calc_peak_alt(peak_models: dict, peak_group: str, X_pred: pd.DataFrame, last: pd.Series):
+def calc_peak_alt(
+    peak_models: dict, peak_group: str, X_pred: pd.DataFrame, last: pd.Series
+):
     peak_hi = None
     peak_day_pred = None
     prob_bear_t = None
@@ -179,7 +202,13 @@ def calc_peak_alt(peak_models: dict, peak_group: str, X_pred: pd.DataFrame, last
         prob_bull_t = float(trend_proba[1])
         _VERBOSE = {"BTC", "ETH", "XRP"}
         if str(last["symbol"]).upper() in _VERBOSE:
-            print(f"\n[{last['symbol']} Cy{int(last['cycle_number'])}] ── Peak 모델 예측 근거 ───────────────")
-            print(f"  raw peak_hi (log)={p_hi_raw:.4f}  → expm1={float(np.expm1(p_hi_raw)):.2f}%  → 클리핑 후={peak_hi:.2f}%")
-            print(f"  raw peak_day={p_day_raw}  → 하한({int(last['end_x'])+2}) 적용 후={peak_day_pred}")
+            print(
+                f"\n[{last['symbol']} Cy{int(last['cycle_number'])}] ── Peak 모델 예측 근거 ───────────────"
+            )
+            print(
+                f"  raw peak_hi (log)={p_hi_raw:.4f}  → expm1={float(np.expm1(p_hi_raw)):.2f}%  → 클리핑 후={peak_hi:.2f}%"
+            )
+            print(
+                f"  raw peak_day={p_day_raw}  → 하한({int(last['end_x'])+2}) 적용 후={peak_day_pred}"
+            )
     return peak_hi, peak_day_pred, prob_bear_t, prob_bull_t
