@@ -18,6 +18,38 @@
 - `npm run build` 통과
 - 실제 최종 완성도는 백엔드 데이터 연결 상태에서 시각 확인 후 추가 조정 필요
 
+### Progress Update (2026-04-12)
+
+- Done: `LegacyAnalyzerApp.tsx`에서 `chart-shell-v2.html` + `/api/dashboard-data` 결합 렌더링
+- Done: legacy 자산을 `chart-shell-v2.html`, `chart-v2.css`, `public/legacy/dist/*` 중심으로 정리
+- Done: 초기 React 차트 컴포넌트 정리 이후 최소 엔트리 구조(`main.tsx`, `LegacyAnalyzerApp.tsx`) 유지
+- Done: `chart-v2.css` 2차 다듬기(헤더/사이드바/툴바/통계바 밀도와 대비를 기준 화면에 더 근접하게 조정)
+- Done: API 실패 시 `sample-dashboard-data.json` 폴백으로 화면 비교 가능하도록 연결
+- In progress: 실제 데이터가 들어간 상태에서 기준 캡처 대비 오차(간격, 폰트, 색) 정밀 조정
+- Next: 모바일 구간에서 sidebar 접힘 동작과 toolbar 우선순위 정리
+- Next: iframe 유지 여부 vs React 흡수 로드맵 확정
+- Blocker: `npm run dev`는 현재 환경에서 `esbuild spawn EPERM`으로 실패 (빌드/정적 서버로 대체 검증 가능)
+- Resolved: `GET /api/dashboard-data` 500 이슈 해결 (원인: 시스템 프록시 `127.0.0.1:9` 강제 환경에서 Supabase 연결 실패, 조치: backend `db.py`에서 Supabase 도메인 `NO_PROXY` 자동 추가)
+
+### Immediate Action Checklist
+
+- [x] `chart-shell-v2.html` 기준 문구/레이아웃 정리
+- [x] `chart-v2.css` 2차 밀도 조정(헤더, 사이드바, 툴바, 통계바)
+- [x] 모바일 기본 가독성 조정(사이드바 최대 높이, 차트 최소 높이, 버튼 터치 영역)
+- [ ] 백엔드 실데이터 연결 상태로 기준 캡처와 1:1 비교
+- [x] API 장애 시에도 샘플 데이터로 1:1 UI 비교 가능한 경로 확보
+- [ ] 레이아웃 오차(px) 1차 보정
+- [ ] 상태색/강조색(활성/비활성, high/low, bear/bull) 2차 보정
+- [ ] crosshair tooltip/legend 가독성 미세 조정
+- [ ] iframe 유지 여부 최종 결정 및 후속 구조 메모 확정
+
+### Definition of Done (Current Round)
+
+- 기준 캡처와 비교했을 때 헤더/사이드바/툴바/차트 비율이 육안 기준으로 동일한 정보 구조를 보인다.
+- 사이드바와 툴바가 차트를 과도하게 밀어내지 않는다.
+- 모바일에서 코인 선택, 토글 버튼, 차트 확인이 모두 가능하다.
+- `npm run build`가 계속 통과한다.
+
 ## Improvement Areas
 
 ### 1. Layout Alignment
