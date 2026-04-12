@@ -15,21 +15,25 @@ load_dotenv(_WORKSPACE_ROOT / "02_backend" / ".env", override=False)
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "") or os.getenv("SUPABASE_KEY", "")
 
-# Binance spot 공개 REST: 1순위 .env BINANCE_API_BASE (기본 data.binance.com).
-# data.binance.com 은 /api/v3 미제공(404) → 코드에서 vision·api 순으로 자동 폴백.
-_BINANCE_PRIMARY = (os.getenv("BINANCE_API_BASE") or "https://data.binance.com").rstrip("/")
-_BINANCE_EXTRA_FALLBACKS = [
+# Binance 공개 REST 호스트 순서 (lib/common/binance_public.py 와 동일 유지)
+BINANCE_HOSTS: list[str] = [
+    "https://data.binance.com",
     "https://data-api.binance.vision",
-    "https://api.binance.com",
-    "https://api.binance.us",
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com",
 ]
 
 
 def _binance_rest_base_chain() -> list[str]:
+    """BINANCE_API_BASE 가 있으면 맨 앞에 넣고, 이어서 BINANCE_HOSTS (중복 제거)."""
     chain: list[str] = []
-    for b in [_BINANCE_PRIMARY] + _BINANCE_EXTRA_FALLBACKS:
+    primary = (os.getenv("BINANCE_API_BASE") or "").strip().rstrip("/")
+    if primary:
+        chain.append(primary)
+    for b in BINANCE_HOSTS:
         b = b.rstrip("/")
-        if b and b not in chain:
+        if b not in chain:
             chain.append(b)
     return chain
 
