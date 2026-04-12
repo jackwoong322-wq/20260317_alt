@@ -54,10 +54,14 @@ pairBTC/alt_cycle_export.csv
 pairBTC/coin_ranking.html
 pairBTC/cycle_chart.html
 pairBTC/peak_timeline.html
-pairUSDT/033_visualizer_html.html
-pairUSDT/pairUSDT/033_visualizer_html.html
+01_pairUSDT/033_visualizer_html.html
 
 playwright-report/
 test-results/
 .pw/
 ms-playwright/
+
+.cursor/
+reports/tmp/
+reports/pytest-tmp/
+reports/pytest-*/
