@@ -7,6 +7,16 @@ function buildShell(html: string, data: unknown) {
   return html.replace('__CHART_DATA__', JSON.stringify(data))
 }
 
+async function loadDashboardData() {
+  const apiRes = await fetch(`${BASE_URL}/api/dashboard-data`)
+  if (apiRes.ok) return apiRes.json()
+
+  const sampleRes = await fetch('/legacy/sample-dashboard-data.json')
+  if (sampleRes.ok) return sampleRes.json()
+
+  throw new Error('Failed to load dashboard data (api + sample)')
+}
+
 export default function LegacyAnalyzerApp() {
   const [srcDoc, setSrcDoc] = useState('')
   const [loading, setLoading] = useState(true)
@@ -20,19 +30,13 @@ export default function LegacyAnalyzerApp() {
       setError(null)
 
       try {
-        const [shellRes, dataRes] = await Promise.all([
-          fetch('/legacy/chart-shell-v2.html'),
-          fetch(`${BASE_URL}/api/dashboard-data`),
-        ])
+        const shellRes = await fetch('/legacy/chart-shell-v2.html')
 
         if (!shellRes.ok) {
           throw new Error('Failed to load legacy chart shell')
         }
-        if (!dataRes.ok) {
-          throw new Error('Failed to load dashboard data')
-        }
 
-        const [shellHtml, data] = await Promise.all([shellRes.text(), dataRes.json()])
+        const [shellHtml, data] = await Promise.all([shellRes.text(), loadDashboardData()])
         if (!cancelled) {
           setSrcDoc(buildShell(shellHtml, data))
         }

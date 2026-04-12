@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -16,9 +17,29 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY", "")
 SUPABASE_PAGE_SIZE = 1000
 
 
+def _append_no_proxy_host(host: str) -> None:
+    if not host:
+        return
+
+    current = os.getenv("NO_PROXY") or os.getenv("no_proxy") or ""
+    parts = [p.strip() for p in current.split(",") if p.strip()]
+    if host not in parts:
+        parts.append(host)
+    merged = ",".join(parts)
+    os.environ["NO_PROXY"] = merged
+    os.environ["no_proxy"] = merged
+
+
+def _ensure_no_proxy_for_supabase() -> None:
+    """Bypass broken global proxy settings for direct Supabase access."""
+    host = urlparse(SUPABASE_URL).hostname or ""
+    _append_no_proxy_host(host)
+
+
 def get_supabase():
     from supabase import create_client
 
+    _ensure_no_proxy_for_supabase()
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
