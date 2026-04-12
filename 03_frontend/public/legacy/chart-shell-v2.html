@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Altcoin Cycle Analyzer</title>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+<link rel="stylesheet" href="/legacy/chart-v2.css">
+</head>
+<body>
+<div class="header">
+  <div class="header-title">ALT<span>/</span>BTC <span class="header-subtitle">CYCLE ANALYZER</span></div>
+  <div class="header-info">PEAK-NORMALIZED · BTC PAIR · DAYS SINCE PEAK</div>
+</div>
+
+<div class="container">
+  <aside class="sidebar">
+    <div class="sidebar-header">COINS — SELECT TO COMPARE</div>
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Search coin...">
+    </div>
+    <div class="coin-list" id="coinList"></div>
+  </aside>
+
+  <main class="main">
+    <div class="chart-toolbar">
+      <span class="toolbar-label">CYCLES:</span>
+      <div class="cycle-toggles" id="cycleToggles"></div>
+      <div class="toolbar-actions">
+        <span class="toolbar-label">SHOW:</span>
+        <button class="cycle-btn" id="toggleRange" onclick="toggleHighLow()">HIGH/LOW</button>
+        <button class="cycle-btn" id="toggleBox" onclick="toggleBoxZone()">BOX ZONE</button>
+        <button class="cycle-btn" id="toggleBearBull" onclick="toggleBearBull()">BEAR/BULL</button>
+      </div>
+    </div>
+
+    <div class="chart-area">
+      <div id="chart"></div>
+      <div class="legend" id="legend" style="display:none"></div>
+      <div id="bearBullOverlay" class="overlay-layer"></div>
+      <div id="boxMarksOverlay" class="overlay-layer overlay-marks"></div>
+      <div id="crosshairTooltip"></div>
+    </div>
+
+    <div class="stats-bar" id="statsBar"></div>
+  </main>
+</div>
+
+<script>const ALL_DATA = __CHART_DATA__;</script>
+<script type="module" src="/legacy/dist/chart.js"></script>
+</body>
+</html>
