@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date, timedelta
 from typing import Any, Optional
 
@@ -12,7 +13,12 @@ from db import fetch_all_rows, get_supabase
 
 router = APIRouter()
 
-BTC_COIN_ID = "bitcoin"
+# 환경변수에서 읽기 — .env의 CYCLE_COIN_ID 값 사용
+BTC_COIN_ID: str = os.getenv("CYCLE_COIN_ID", "bitcoin")
+
+# 반복 사용되는 select 컬럼 상수
+_BOX_COLS = "start_x, end_x, hi, lo, hi_day, lo_day"
+_CYCLE_DATA_COLS = "timestamp, days_since_peak, close_rate"
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +155,42 @@ def _get_peak_date(cycle_number: int, sb: Any) -> Optional[date]:
     return date.fromisoformat(str(raw)[:10])
 
 
+def _fetch_cycle_data(sb: Any, cycle_number: int) -> list[dict]:
+    """alt_cycle_data에서 특정 사이클의 날짜·요율 데이터 전체 조회."""
+    return fetch_all_rows(
+        sb.table("alt_cycle_data")
+        .select(_CYCLE_DATA_COLS)
+        .eq("coin_id", BTC_COIN_ID)
+        .eq("cycle_number", cycle_number)
+        .order("days_since_peak")
+    )
+
+
+def _fetch_box_rows(sb: Any, cycle_number: int, phase: str, is_prediction: int) -> list[dict]:
+    """coin_analysis_results에서 phase·예측여부 조건으로 박스 조회."""
+    return fetch_all_rows(
+        sb.table("coin_analysis_results")
+        .select(_BOX_COLS)
+        .eq("coin_id", BTC_COIN_ID)
+        .eq("cycle_number", cycle_number)
+        .eq("phase", phase)
+        .eq("is_prediction", is_prediction)
+        .order("box_index")
+    )
+
+
+def _to_line_data(rows: list[dict]) -> list[LineDataPoint]:
+    """alt_cycle_data rows → LineDataPoint 리스트 변환."""
+    return [
+        LineDataPoint(
+            timestamp=str(row["timestamp"])[:19],
+            day=int(row["days_since_peak"]),
+            value=round(float(row.get("close_rate") or 0.0), 4),
+        )
+        for row in rows
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -228,7 +270,6 @@ def cycle_menu() -> CycleMenuResponse:
                 # 미완료 실제 박스가 있으면 현재 진행 중 사이클
                 if is_completed == 0:
                     bear_cycles[cn]["current"] = True
-
             elif phase == "BULL":
                 if cn not in bull_cycles:
                     bull_cycles[cn] = {"current": False}
@@ -332,49 +373,22 @@ def bear_boxes(cycle: int = Query(default=5, ge=1)) -> BearBoxesResponse:
             raise HTTPException(status_code=404, detail=f"cycle={cycle} 데이터 없음")
 
         # BULL 실제 박스의 최소 start_x → bear lineData 상한 결정
-        bull_starts = fetch_all_rows(
-            sb.table("coin_analysis_results")
-            .select("start_x")
-            .eq("coin_id", BTC_COIN_ID)
-            .eq("cycle_number", cycle)
-            .eq("phase", "BULL")
-            .eq("is_prediction", 0)
-            .order("start_x")
-        )
+        bull_starts = _fetch_box_rows(sb, cycle, "BULL", 0)
         bull_start_x: Optional[int] = int(bull_starts[0]["start_x"]) if bull_starts else None
 
         # lineData: BEAR 구간(BULL 시작 전)
-        cycle_rows = fetch_all_rows(
-            sb.table("alt_cycle_data")
-            .select("timestamp, days_since_peak, close_rate")
-            .eq("coin_id", BTC_COIN_ID)
-            .eq("cycle_number", cycle)
-            .order("days_since_peak")
-        )
+        all_cycle_rows = _fetch_cycle_data(sb, cycle)
         line_rows = (
-            [r for r in cycle_rows if int(r["days_since_peak"]) < bull_start_x]
+            [r for r in all_cycle_rows if int(r["days_since_peak"]) < bull_start_x]
             if bull_start_x is not None
-            else cycle_rows
+            else all_cycle_rows
         )
-        line_data = [
-            LineDataPoint(
-                timestamp=str(row["timestamp"])[:19],
-                day=int(row["days_since_peak"]),
-                value=round(float(row.get("close_rate") or 0.0), 4),
-            )
-            for row in line_rows
-        ]
+        line_data = _to_line_data(line_rows)
 
-        # boxes: 실제 BEAR 박스 (is_prediction=0)
-        bear_box_rows = fetch_all_rows(
-            sb.table("coin_analysis_results")
-            .select("start_x, end_x, hi, lo, hi_day, lo_day")
-            .eq("coin_id", BTC_COIN_ID)
-            .eq("cycle_number", cycle)
-            .eq("phase", "BEAR")
-            .eq("is_prediction", 0)
-            .order("box_index")
-        )
+        # boxes: 실제 BEAR 박스 / predictions: 예측 BEAR 박스
+        bear_box_rows = _fetch_box_rows(sb, cycle, "BEAR", 0)
+        pred_rows = _fetch_box_rows(sb, cycle, "BEAR", 1)
+
         boxes = [
             BearBox(
                 Start_Timestamp=_offset_to_ts(peak_dt, row.get("lo_day")),
@@ -385,17 +399,6 @@ def bear_boxes(cycle: int = Query(default=5, ge=1)) -> BearBoxesResponse:
             )
             for row in bear_box_rows
         ]
-
-        # predictions: 예측 BEAR 박스 (is_prediction=1)
-        pred_rows = fetch_all_rows(
-            sb.table("coin_analysis_results")
-            .select("start_x, end_x, hi, lo, hi_day, lo_day")
-            .eq("coin_id", BTC_COIN_ID)
-            .eq("cycle_number", cycle)
-            .eq("phase", "BEAR")
-            .eq("is_prediction", 1)
-            .order("box_index")
-        )
         predictions = [
             BearPrediction(
                 Start_Timestamp=_offset_to_ts(peak_dt, row.get("lo_day")),
@@ -435,15 +438,7 @@ def bull_boxes(cycle: int = Query(default=4, ge=1)) -> BullBoxesResponse:
             raise HTTPException(status_code=404, detail=f"cycle={cycle} 데이터 없음")
 
         # BULL 실제 박스
-        bull_box_rows = fetch_all_rows(
-            sb.table("coin_analysis_results")
-            .select("start_x, end_x, hi, lo, hi_day, lo_day")
-            .eq("coin_id", BTC_COIN_ID)
-            .eq("cycle_number", cycle)
-            .eq("phase", "BULL")
-            .eq("is_prediction", 0)
-            .order("box_index")
-        )
+        bull_box_rows = _fetch_box_rows(sb, cycle, "BULL", 0)
         if not bull_box_rows:
             raise HTTPException(status_code=404, detail=f"cycle={cycle} BULL 박스 없음")
 
@@ -452,20 +447,13 @@ def bull_boxes(cycle: int = Query(default=4, ge=1)) -> BullBoxesResponse:
         # lineData: BULL 시작점(첫 BULL start_x)부터
         cycle_rows = fetch_all_rows(
             sb.table("alt_cycle_data")
-            .select("timestamp, days_since_peak, close_rate")
+            .select(_CYCLE_DATA_COLS)
             .eq("coin_id", BTC_COIN_ID)
             .eq("cycle_number", cycle)
             .gte("days_since_peak", bull_min_start_x)
             .order("days_since_peak")
         )
-        line_data = [
-            LineDataPoint(
-                timestamp=str(row["timestamp"])[:19],
-                day=int(row["days_since_peak"]),
-                value=round(float(row.get("close_rate") or 0.0), 4),
-            )
-            for row in cycle_rows
-        ]
+        line_data = _to_line_data(cycle_rows)
 
         boxes = [
             BullBox(
