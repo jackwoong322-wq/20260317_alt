@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import coins, chart, predictions
+from routers import coins, chart, predictions, btc_chart
 
 app = FastAPI(title="CryptoChart API", version="1.0.0")
 
@@ -17,6 +17,7 @@ app.add_middleware(
 app.include_router(coins.router,       prefix="/api")
 app.include_router(chart.router,       prefix="/api")
 app.include_router(predictions.router, prefix="/api")
+app.include_router(btc_chart.router,   prefix="/api")
 
 
 @app.get("/health")
