@@ -15,6 +15,12 @@ Peak 확정 로직:
   4. 다음 탐색은 Peak 이후 3년 뒤부터
   5. 반복
 
+증분 업데이트 로직:
+  - alt_cycle_summary에서 low_date IS NULL인 row = current cycle
+  - 직전 확정 Peak 이후 2년 시점부터 ohlcv만 로드
+  - current cycle 데이터/summary만 재계산 후 저장
+  - current peak가 확정 조건 충족 시 전체 재실행으로 fallback
+
 alt_cycle_summary 구조:
   peak_date / peak_price
   peak_pct_from_low  : 직전 저점 대비 +%  (from prev low)
@@ -60,6 +66,11 @@ def date_to_ms(date_str: str) -> int:
 
 def ms_to_date(ts_ms: int) -> str:
     return datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).strftime("%Y/%m/%d")
+
+
+def ms_to_iso(ts_ms: int) -> str:
+    """timestamp(ms) → YYYY-MM-DD"""
+    return datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
 
 
 def slash_to_iso(date_str: str | None) -> str | None:
@@ -132,15 +143,18 @@ def get_coins_supabase() -> list[tuple[str, str]]:
 # ══════════════════════════════════════════════════════
 
 
-def load_ohlcv_supabase(coin_id: str) -> pd.DataFrame:
-    rows = fetch_all_supabase(
-        "ohlcv",
-        "date,high,low,close",
-        {
-            "coin_id": f"eq.{coin_id}",
-            "order": "date.asc",
-        },
-    )
+def load_ohlcv_supabase(coin_id: str, from_date: str | None = None) -> pd.DataFrame:
+    """
+    from_date: YYYY-MM-DD 형식. 지정 시 해당 날짜 이후 데이터만 로드.
+    """
+    extra = {
+        "coin_id": f"eq.{coin_id}",
+        "order": "date.asc",
+    }
+    if from_date:
+        extra["date"] = f"gte.{from_date}"
+
+    rows = fetch_all_supabase("ohlcv", "date,high,low,close", extra)
 
     if not rows:
         return pd.DataFrame()
@@ -169,7 +183,7 @@ def is_confirmed_peak(df: pd.DataFrame, pos: int) -> bool:
     confirm_end_ts = peak_ts + PEAK_CONFIRM_MS
     within_1yr = after_df[after_df["timestamp"] <= confirm_end_ts]
 
-    if within_1yr.empty:
+    if within_1yr.empty:  # type: ignore[union-attr]
         return False
 
     # ① 1년 내 고점 갱신하면 가짜 Peak
@@ -180,6 +194,29 @@ def is_confirmed_peak(df: pd.DataFrame, pos: int) -> bool:
     within_3yr = after_df[after_df["timestamp"] <= peak_ts + 3 * ONE_YEAR_MS]
     drawdown_threshold = peak_high * (1 - PEAK_DRAWDOWN_RATE)
     if within_3yr["low"].min() > drawdown_threshold:
+        return False
+
+    return True
+
+
+def check_if_peak_confirmed(df: pd.DataFrame, peak_ts: int, peak_high: float) -> bool:
+    """
+    current peak가 확정 조건을 충족하는지 체크.
+    df는 current cycle 구간 데이터 (peak 이후 포함).
+    """
+    after_df = df[df["timestamp"] > peak_ts]
+    if after_df.empty:
+        return False
+
+    within_1yr = after_df[after_df["timestamp"] <= peak_ts + PEAK_CONFIRM_MS]
+    if within_1yr.empty:  # type: ignore[union-attr]
+        return False
+
+    if within_1yr["high"].max() >= peak_high:
+        return False
+
+    within_3yr = after_df[after_df["timestamp"] <= peak_ts + 3 * ONE_YEAR_MS]
+    if within_3yr["low"].min() > peak_high * (1 - PEAK_DRAWDOWN_RATE):
         return False
 
     return True
@@ -231,7 +268,7 @@ def find_all_peaks(df: pd.DataFrame, symbol: str = "") -> list[tuple]:
 # ══════════════════════════════════════════════════════
 
 
-def find_low_between(df: pd.DataFrame, from_ts: int, to_ts: int = None) -> tuple:
+def find_low_between(df: pd.DataFrame, from_ts: int, to_ts: int | None = None) -> tuple:
     """
     from_ts ~ to_ts 구간에서 최저점 날짜/가격 반환
     to_ts=None 이면 끝까지
@@ -242,7 +279,7 @@ def find_low_between(df: pd.DataFrame, from_ts: int, to_ts: int = None) -> tuple
     seg = df[mask]
     if seg.empty:
         return None, None
-    idx = seg["low"].idxmin()
+    idx = seg["low"].idxmin()  # type: ignore[union-attr]
     low_ts = seg.loc[idx, "timestamp"]
     low_price = seg.loc[idx, "low"]
     return int(low_ts), float(low_price)
@@ -258,7 +295,7 @@ def calculate_cycle(
     peak_ts: int,
     peak_high: float,
     cycle_num: int,
-    next_peak_ts: int = None,
+    next_peak_ts: int | None = None,
     is_current: bool = False,
 ) -> list[dict]:
     mask = df["timestamp"] >= peak_ts
@@ -384,6 +421,18 @@ def delete_by_coin_supabase(table: str, coin_id: str):
     res.raise_for_status()
 
 
+def delete_by_coin_cycle_supabase(table: str, coin_id: str, cycle_number: int):
+    """코인 + cycle_number 기준으로 삭제 (증분 업데이트용)"""
+    headers = {**get_supabase_headers(), "Prefer": "return=minimal"}
+    res = requests.delete(
+        f"{SUPABASE_URL}/rest/v1/{table}",
+        params={"coin_id": f"eq.{coin_id}", "cycle_number": f"eq.{cycle_number}"},
+        headers=headers,
+        timeout=60,
+    )
+    res.raise_for_status()
+
+
 def post_rows_supabase(table: str, rows: list[dict]):
     headers = {
         **get_supabase_headers(),
@@ -399,6 +448,22 @@ def post_rows_supabase(table: str, rows: list[dict]):
             timeout=60,
         )
         res.raise_for_status()
+
+
+def upsert_rows_supabase(table: str, rows: list[dict]):
+    """UNIQUE 키 기준 upsert (증분 업데이트용)"""
+    headers = {
+        **get_supabase_headers(),
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal,resolution=merge-duplicates",
+    }
+    res = requests.post(
+        f"{SUPABASE_URL}/rest/v1/{table}",
+        headers=headers,
+        json=rows,
+        timeout=60,
+    )
+    res.raise_for_status()
 
 
 def save_cycle_data_supabase(coin_id: str, records: list[dict]) -> int:
@@ -457,6 +522,160 @@ def save_summary_supabase(coin_id: str, summaries: list[dict]) -> int:
 
     post_rows_supabase("alt_cycle_summary", payload)
     return len(payload)
+
+
+def save_current_cycle_data(coin_id: str, cycle_number: int, records: list[dict]):
+    """current cycle 데이터만 교체 (증분 업데이트용)"""
+    delete_by_coin_cycle_supabase("alt_cycle_data", coin_id, cycle_number)
+    if not records:
+        return
+
+    payload = [
+        {
+            "coin_id": coin_id,
+            "cycle_number": r["cycle_number"],
+            "cycle_name": r["cycle_name"],
+            "days_since_peak": r["days_since_peak"],
+            "timestamp": slash_to_timestamptz(r["timestamp"]),
+            "close_price": r["close_price"],
+            "low_price": r["low_price"],
+            "high_price": r["high_price"],
+            "close_rate": r["close_rate"],
+            "low_rate": r["low_rate"],
+            "high_rate": r["high_rate"],
+            "peak_date": slash_to_iso(r["peak_date"]),
+            "peak_price": r["peak_price"],
+        }
+        for r in records
+    ]
+    post_rows_supabase("alt_cycle_data", payload)
+
+
+def save_current_cycle_summary(coin_id: str, summary: dict):
+    """current cycle summary upsert (증분 업데이트용)"""
+    payload = [
+        {
+            "coin_id": coin_id,
+            "cycle_number": summary["cycle_number"],
+            "cycle_name": summary["cycle_name"],
+            "peak_date": slash_to_iso(summary["peak_date"]),
+            "peak_price": summary["peak_price"],
+            "peak_pct_from_low": summary["peak_pct_from_low"],
+            "low_date": None,
+            "low_price": None,
+            "low_pct_from_peak": None,
+            "prev_peak_date": summary["prev_peak_date"],
+            "prev_peak_price": summary["prev_peak_price"],
+            "prev_low_date": summary["prev_low_date"],
+            "prev_low_price": summary["prev_low_price"],
+        }
+    ]
+    upsert_rows_supabase("alt_cycle_summary", payload)
+
+
+# ══════════════════════════════════════════════════════
+# 증분 업데이트 (Supabase 조회)
+# ══════════════════════════════════════════════════════
+
+
+def fetch_current_cycle_summary(coin_id: str) -> dict | None:
+    """
+    alt_cycle_summary에서 current cycle row (low_date IS NULL) 조회.
+    없으면 None 반환 → full run 필요.
+    """
+    rows = fetch_all_supabase(
+        "alt_cycle_summary",
+        "cycle_number,peak_date,peak_price,peak_pct_from_low,prev_peak_date,prev_peak_price,prev_low_date,prev_low_price",
+        {
+            "coin_id": f"eq.{coin_id}",
+            "low_date": "is.null",
+            "order": "cycle_number.desc",
+            "limit": "1",
+        },
+    )
+    return rows[0] if rows else None
+
+
+# ══════════════════════════════════════════════════════
+# 증분 업데이트 처리
+# ══════════════════════════════════════════════════════
+
+
+def process_incremental(coin_id: str) -> bool:
+    """
+    current cycle만 재계산하는 증분 업데이트.
+    Returns:
+      True  → 증분 업데이트 완료
+      False → full run 필요 (첫 실행 / current peak 확정됨 / 데이터 없음)
+    """
+    current = fetch_current_cycle_summary(coin_id)
+    if current is None:
+        return False  # 첫 실행, full run 필요
+
+    # 직전 확정 Peak가 없으면 (첫 사이클이 current인 경우) full run
+    if not current["prev_peak_date"]:
+        return False
+
+    cycle_number = current["cycle_number"]
+    prev_peak_ts = date_to_ms(current["prev_peak_date"])
+    current_search_ts = prev_peak_ts + NEXT_SEARCH_MS
+
+    # 직전 확정 Peak 이후 2년 시점부터만 ohlcv 로드
+    from_date = ms_to_iso(current_search_ts)
+    df = load_ohlcv_supabase(coin_id, from_date=from_date)
+    if df.empty:
+        return False
+
+    # current peak 탐지 (구간 내 최고가)
+    today_ts = int(datetime.now(timezone.utc).timestamp() * 1000)
+    search_df = df[df["timestamp"] <= today_ts]
+    if search_df.empty:
+        return False
+
+    current_peak_idx = search_df["high"].idxmax()  # type: ignore[union-attr]
+    current_peak_ts = int(df.loc[current_peak_idx, "timestamp"])
+    current_peak_high = float(df.loc[current_peak_idx, "high"])
+
+    # current peak가 확정 조건 충족하면 full run으로 전환
+    if check_if_peak_confirmed(df, current_peak_ts, current_peak_high):
+        print(f"  → Current Peak 확정됨, 전체 재실행")
+        return False
+
+    print(
+        f"    [Current Peak]  {ms_to_date(current_peak_ts)}"
+        f"  @ {current_peak_high:>14,.4f}"
+    )
+
+    # current cycle 데이터 계산 (peak부터)
+    records = calculate_cycle(df, current_peak_ts, current_peak_high, cycle_number, None, True)
+
+    # summary 재계산 (prev 정보는 DB에서 재사용)
+    prev_low_price = current["prev_low_price"]
+    if prev_low_price and prev_low_price > 0:
+        peak_pct_from_low = round(
+            ((current_peak_high - prev_low_price) / prev_low_price) * 100, 2
+        )
+    else:
+        peak_pct_from_low = None
+
+    summary = {
+        "cycle_number": cycle_number,
+        "cycle_name": make_cycle_name(current_peak_ts, is_current=True),
+        "peak_date": ms_to_date(current_peak_ts),
+        "peak_price": current_peak_high,
+        "peak_pct_from_low": peak_pct_from_low,
+        "prev_peak_date": current["prev_peak_date"],
+        "prev_peak_price": current["prev_peak_price"],
+        "prev_low_date": current["prev_low_date"],
+        "prev_low_price": current["prev_low_price"],
+    }
+
+    # 저장
+    save_current_cycle_data(coin_id, cycle_number, records)
+    save_current_cycle_summary(coin_id, summary)
+
+    print(f"  → [증분] {len(records)}행 업데이트 ✓")
+    return True
 
 
 # ══════════════════════════════════════════════════════
@@ -561,6 +780,13 @@ def main():
     for i, (coin_id, symbol) in enumerate(coins, 1):
         print(f"[{i}/{len(coins)}] {symbol} ({coin_id})")
 
+        # ── 증분 업데이트 시도 ────────────────────────────
+        if process_incremental(coin_id):
+            success += 1
+            print()
+            continue
+
+        # ── Full run (첫 실행 / current peak 확정) ────────
         df = load_ohlcv_supabase(coin_id)
         if df.empty or len(df) < 365:
             print(f"  → 데이터 부족 ({len(df)}일), 건너뜀\n")
@@ -589,7 +815,7 @@ def main():
         if not after_3yr.empty:
             current_cycle_num = last_cycle_num + 1
 
-            current_peak_idx = after_3yr["high"].idxmax()
+            current_peak_idx = after_3yr["high"].idxmax()  # type: ignore[union-attr]
             current_peak_ts = int(df.loc[current_peak_idx, "timestamp"])
             current_peak_high = float(df.loc[current_peak_idx, "high"])
 
