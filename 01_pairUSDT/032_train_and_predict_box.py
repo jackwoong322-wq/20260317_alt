@@ -301,13 +301,13 @@ def main():
     log.info("=" * 65)
     log.info("실행 모드: supabase")
     try:
-        reset_predictions_supabase()
-    except ValueError:
-        log.warning("Supabase 설정이 없어 reset_predictions_supabase를 건너뜁니다.")
-    try:
         import duckdb
     except ImportError as e:
         raise ImportError("duckdb 패키지가 필요합니다. pip install duckdb") from e
+    try:
+        reset_predictions_supabase()
+    except ValueError:
+        log.warning("Supabase 설정이 없어 reset_predictions_supabase를 건너뜁니다.")
     conn = duckdb.connect(database=":memory:")
     setup_stage_db_for_supabase(conn)
     hydrate_stage_db_from_supabase(conn)
