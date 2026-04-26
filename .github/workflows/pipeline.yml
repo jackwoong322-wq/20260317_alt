@@ -40,7 +40,7 @@ jobs:
           cache: 'pip'
 
       - name: 패키지 설치
-        run: pip install -r ../requirements.txt supabase
+        run: pip install -r ../requirements.txt
 
       - name: 012 누락 데이터 업데이트
         run: python 012_cryptoCollectorUsdt_Update.py
@@ -64,7 +64,7 @@ jobs:
           cache: 'pip'
 
       - name: 패키지 설치
-        run: pip install -r ../requirements.txt supabase
+        run: pip install -r ../requirements.txt
 
       - name: 021 사이클 분석
         run: python 021_altCycleAnalysisUsdt.py
