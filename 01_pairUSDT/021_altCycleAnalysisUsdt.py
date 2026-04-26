@@ -199,29 +199,6 @@ def is_confirmed_peak(df: pd.DataFrame, pos: int) -> bool:
     return True
 
 
-def check_if_peak_confirmed(df: pd.DataFrame, peak_ts: int, peak_high: float) -> bool:
-    """
-    current peak가 확정 조건을 충족하는지 체크.
-    df는 current cycle 구간 데이터 (peak 이후 포함).
-    """
-    after_df = df[df["timestamp"] > peak_ts]
-    if after_df.empty:
-        return False
-
-    within_1yr = after_df[after_df["timestamp"] <= peak_ts + PEAK_CONFIRM_MS]
-    if within_1yr.empty:  # type: ignore[union-attr]
-        return False
-
-    if within_1yr["high"].max() >= peak_high:
-        return False
-
-    within_3yr = after_df[after_df["timestamp"] <= peak_ts + 3 * ONE_YEAR_MS]
-    if within_3yr["low"].min() > peak_high * (1 - PEAK_DRAWDOWN_RATE):
-        return False
-
-    return True
-
-
 def find_all_peaks(df: pd.DataFrame, symbol: str = "") -> list[tuple]:
     """
     확정된 Peak 목록을 반환.
@@ -459,6 +436,7 @@ def upsert_rows_supabase(table: str, rows: list[dict]):
     }
     res = requests.post(
         f"{SUPABASE_URL}/rest/v1/{table}",
+        params={"on_conflict": "coin_id,cycle_number"},
         headers=headers,
         json=rows,
         timeout=60,
@@ -552,7 +530,8 @@ def save_current_cycle_data(coin_id: str, cycle_number: int, records: list[dict]
 
 
 def save_current_cycle_summary(coin_id: str, summary: dict):
-    """current cycle summary upsert (증분 업데이트용)"""
+    """current cycle summary 교체 (증분 업데이트용)"""
+    delete_by_coin_cycle_supabase("alt_cycle_summary", coin_id, summary["cycle_number"])
     payload = [
         {
             "coin_id": coin_id,
@@ -570,7 +549,7 @@ def save_current_cycle_summary(coin_id: str, summary: dict):
             "prev_low_price": summary["prev_low_price"],
         }
     ]
-    upsert_rows_supabase("alt_cycle_summary", payload)
+    post_rows_supabase("alt_cycle_summary", payload)
 
 
 # ══════════════════════════════════════════════════════
@@ -603,10 +582,11 @@ def fetch_current_cycle_summary(coin_id: str) -> dict | None:
 
 def process_incremental(coin_id: str) -> bool:
     """
+    alt_cycle_summary의 current cycle row(low_date IS NULL)를 기준으로
     current cycle만 재계산하는 증분 업데이트.
     Returns:
       True  → 증분 업데이트 완료
-      False → full run 필요 (첫 실행 / current peak 확정됨 / 데이터 없음)
+      False → full run 필요 (첫 실행 / 기준 데이터 없음)
     """
     current = fetch_current_cycle_summary(coin_id)
     if current is None:
@@ -635,11 +615,6 @@ def process_incremental(coin_id: str) -> bool:
     current_peak_idx = search_df["high"].idxmax()  # type: ignore[union-attr]
     current_peak_ts = int(df.loc[current_peak_idx, "timestamp"])
     current_peak_high = float(df.loc[current_peak_idx, "high"])
-
-    # current peak가 확정 조건 충족하면 full run으로 전환
-    if check_if_peak_confirmed(df, current_peak_ts, current_peak_high):
-        print(f"  → Current Peak 확정됨, 전체 재실행")
-        return False
 
     print(
         f"    [Current Peak]  {ms_to_date(current_peak_ts)}"
