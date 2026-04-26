@@ -1,15 +1,15 @@
-name: Crypto Pipeline — Analyze (012, 021, 031)
+name: Crypto Pipeline Analyze (012, 021, 031)
 
 on:
   schedule:
-    # 매일 00:00 UTC — 수집 + 분석 (012, 021, 031)
-    - cron: '0 0 * * *'
+    # Run collection and analysis every day at 00:00 UTC.
+    - cron: "0 0 * * *"
   workflow_dispatch:
     inputs:
       run_mode:
-        description: 'collect (012) | analyze (021+031) | all'
+        description: "collect (012) | analyze (021+031) | all"
         required: true
-        default: 'all'
+        default: "all"
 
 env:
   DB_MODE: supabase
@@ -19,12 +19,9 @@ env:
   BINANCE_SECRET_KEY: ${{ secrets.BINANCE_SECRET_KEY }}
 
 jobs:
-  collect:
-    name: "012 데이터 업데이트 수집"
+  analyze-pipeline:
+    name: Run 012, 021, 031 pipeline
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'collect' || inputs.run_mode == 'all')
     defaults:
       run:
         working-directory: 01_pairUSDT
@@ -34,38 +31,26 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: pip
 
-      - name: 패키지 설치
+      - name: Install dependencies
         run: pip install -r ../requirements_action_analyze.txt
 
-      - name: 012 누락 데이터 업데이트
+      - name: Run 012 collector update
+        if: |
+          github.event_name == 'schedule' ||
+          github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'collect' || inputs.run_mode == 'all')
         run: python 012_cryptoCollectorUsdt_Update.py
 
-  analyze:
-    name: "021+031 사이클/박스 분석"
-    runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'analyze' || inputs.run_mode == 'all')
-    defaults:
-      run:
-        working-directory: 01_pairUSDT
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: 패키지 설치
-        run: pip install -r ../requirements_action_analyze.txt
-
-      - name: 021 사이클 분석
+      - name: Run 021 cycle analysis
+        if: |
+          github.event_name == 'schedule' ||
+          github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'analyze' || inputs.run_mode == 'all')
         run: python 021_altCycleAnalysisUsdt.py
 
-      - name: 031 박스 분석
+      - name: Run 031 box analysis
+        if: |
+          github.event_name == 'schedule' ||
+          github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'analyze' || inputs.run_mode == 'all')
         run: python 031_box_analyzer_to_supabase.py
