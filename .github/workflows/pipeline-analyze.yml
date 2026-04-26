@@ -1,15 +1,13 @@
-name: Crypto Data Pipeline
+name: Crypto Pipeline — Analyze (012, 021, 031)
 
 on:
   schedule:
-    # 매일 00:00 UTC — 수집 (012)
+    # 매일 00:00 UTC — 수집 + 분석 (012, 021, 031)
     - cron: '0 0 * * *'
-    # 매주 월요일 01:00 UTC — 분석/학습 (021, 031, 032)
-    - cron: '0 1 * * 1'
   workflow_dispatch:
     inputs:
       run_mode:
-        description: 'collect (012) | analyze (021+031+032) | all'
+        description: 'collect (012) | analyze (021+031) | all'
         required: true
         default: 'all'
 
@@ -25,8 +23,8 @@ jobs:
     name: "012 데이터 업데이트 수집"
     runs-on: ubuntu-latest
     if: |
-      github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'collect' || inputs.run_mode == 'all') ||
-      github.event.schedule == '0 0 * * *'
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'collect' || inputs.run_mode == 'all')
     defaults:
       run:
         working-directory: 01_pairUSDT
@@ -40,17 +38,17 @@ jobs:
           cache: 'pip'
 
       - name: 패키지 설치
-        run: pip install -r ../requirements.txt
+        run: pip install -r ../requirements_action_analyze.txt
 
       - name: 012 누락 데이터 업데이트
         run: python 012_cryptoCollectorUsdt_Update.py
 
   analyze:
-    name: "021+031+032 분석/학습/예측"
+    name: "021+031 사이클/박스 분석"
     runs-on: ubuntu-latest
     if: |
-      github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'analyze' || inputs.run_mode == 'all') ||
-      github.event.schedule == '0 1 * * 1'
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'analyze' || inputs.run_mode == 'all')
     defaults:
       run:
         working-directory: 01_pairUSDT
@@ -64,14 +62,10 @@ jobs:
           cache: 'pip'
 
       - name: 패키지 설치
-        run: pip install -r ../requirements.txt
+        run: pip install -r ../requirements_action_analyze.txt
 
       - name: 021 사이클 분석
         run: python 021_altCycleAnalysisUsdt.py
 
       - name: 031 박스 분석
         run: python 031_box_analyzer_to_supabase.py
-
-      - name: 032 학습 및 예측
-        run: python 032_train_and_predict_box.py
-        timeout-minutes: 30
