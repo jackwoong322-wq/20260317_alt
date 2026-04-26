@@ -26,9 +26,6 @@ function resolveApiBaseUrl() {
   if (import.meta.env.DEV) {
     return import.meta.env.VITE_API_LOCAL_URL || 'http://127.0.0.1:8000'
   }
-  if (typeof window !== 'undefined' && window.location.hostname.endsWith('vercel.app')) {
-    return envUrl || 'https://btcreack20260222-fb.onrender.com'
-  }
   return envUrl || 'http://127.0.0.1:8000'
 }
 

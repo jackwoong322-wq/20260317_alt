@@ -9,12 +9,10 @@ function buildShell(html: string, data: unknown) {
 
 async function loadDashboardData() {
   const apiRes = await fetch(`${BASE_URL}/api/dashboard-data`)
-  if (apiRes.ok) return apiRes.json()
-
-  const sampleRes = await fetch('/legacy/sample-dashboard-data.json')
-  if (sampleRes.ok) return sampleRes.json()
-
-  throw new Error('Failed to load dashboard data (api + sample)')
+  if (!apiRes.ok) {
+    throw new Error(`Failed to load dashboard data: ${apiRes.status} ${apiRes.statusText}`)
+  }
+  return apiRes.json()
 }
 
 export default function LegacyAnalyzerApp() {
