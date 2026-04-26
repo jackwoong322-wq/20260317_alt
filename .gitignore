@@ -55,6 +55,8 @@ pairBTC/coin_ranking.html
 pairBTC/cycle_chart.html
 pairBTC/peak_timeline.html
 01_pairUSDT/033_visualizer_html.html
+01_pairUSDT/templates/dist/
+.coverage
 
 playwright-report/
 test-results/
