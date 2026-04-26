@@ -80,7 +80,8 @@ Applies to `01_pairUSDT/`.
 ## GitHub Actions Rules
 
 - Workflows live in `.github/workflows/`.
-- Pipeline file: `pipeline.yml` (collect: daily 00:00 UTC / analyze: weekly Mon 01:00 UTC)
+- `pipeline-analyze.yml`: 012, 021, 031 실행 (매일 00:00 UTC)
+- `pipeline-predict.yml`: 032 실행 (매주 월요일 01:00 UTC)
 - Never hardcode secrets. Use repository or environment secrets.
 
 ---
@@ -103,6 +104,21 @@ Applies to `01_pairUSDT/`.
 - For import errors: check module paths before changing code broadly.
 - For FastAPI `422` errors: inspect the Pydantic schema and request shape first.
 - For CORS issues: verify backend config before changing frontend calls.
+
+---
+
+## Python Test Rules
+
+Applies to `01_pairUSDT/` and `02_backend/`.
+
+- Framework: `unittest` + `unittest.mock` (pytest는 보조 실행기로만 사용)
+- 실행: `python -m pytest <파일>` 또는 `python -m unittest <파일>`
+- 외부 API(`requests`, Supabase 클라이언트) 직접 호출 금지 → mock 처리 필수
+- `01_pairUSDT/` 스크립트: `requests.get/post/delete` mock (`unittest.mock.patch`)
+- `02_backend/` 스크립트: Supabase 클라이언트 mock (`FakeSupabase` 패턴)
+- Mock 선언 위치: 파일 상단 또는 `setUp` (테스트 케이스 내부 선언 금지)
+- `setUp`/`tearDown`에서 patch 시작/종료 관리
+- 커버리지 80% 이상 달성 필수
 
 ---
 
