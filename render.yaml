@@ -11,3 +11,5 @@ services:
         sync: false
       - key: SUPABASE_KEY
         sync: false
+      - key: CYCLE_COIN_ID
+        sync: false
