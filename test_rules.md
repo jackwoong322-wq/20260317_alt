@@ -5,10 +5,18 @@
 
 ## 실행 순서 (반드시 이 순서대로)
 
+### JavaScript / TypeScript (`03_frontend/`, `04_frontend_0222fb/`)
 ```
 1. 단위 테스트       → jest [파일명]
 2. 전체 테스트       → jest --passWithNoTests
 3. 커버리지 측정     → jest --coverage
+```
+
+### Python (`01_pairUSDT/`, `02_backend/`)
+```
+1. 단위 테스트       → python -m pytest <파일> -v
+2. 전체 테스트       → python -m pytest --ignore=node_modules
+3. 커버리지 측정     → python -m pytest --cov=. --cov-report=term-missing
 ```
 
 순서를 건너뛰거나 역순 실행 금지.
