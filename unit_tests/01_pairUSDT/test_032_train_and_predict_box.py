@@ -34,11 +34,15 @@ def test_032_normalize_rows_replaces_non_finite_values():
 
 def test_032_main_syncs_empty_predictions_without_training(monkeypatch):
     module = load_script_module("032_train_and_predict_box.py")
+    reset_calls = []
     sync_calls = []
     fake_conn = SimpleNamespace(close=lambda: None)
 
     monkeypatch.setitem(
         sys.modules, "duckdb", SimpleNamespace(connect=lambda database: fake_conn)
+    )
+    monkeypatch.setattr(
+        module, "reset_predictions_supabase", lambda: reset_calls.append(True)
     )
     monkeypatch.setattr(module, "setup_stage_db_for_supabase", lambda _conn: None)
     monkeypatch.setattr(module, "hydrate_stage_db_from_supabase", lambda _conn: None)
@@ -49,4 +53,5 @@ def test_032_main_syncs_empty_predictions_without_training(monkeypatch):
 
     module.main()
 
+    assert reset_calls == [True]
     assert sync_calls == [True]
