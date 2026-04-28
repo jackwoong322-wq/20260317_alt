@@ -81,7 +81,7 @@ Applies to `01_pairUSDT/`.
 
 - Workflows live in `.github/workflows/`.
 - `pipeline-analyze.yml`: 012, 021, 031 실행 (매일 00:00 UTC)
-- `pipeline-predict.yml`: 032 실행 (매주 월요일 01:00 UTC)
+- `pipeline-predict.yml`: 032 실행 (매일 01:00 UTC — analyze 1시간 후)
 - Never hardcode secrets. Use repository or environment secrets.
 
 ---
