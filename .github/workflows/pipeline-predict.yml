@@ -2,8 +2,8 @@ name: Crypto Pipeline — Predict (032)
 
 on:
   schedule:
-    # 매주 월요일 01:00 UTC — 학습 및 예측 (032)
-    - cron: '0 1 * * 1'
+    # 매일 01:00 UTC — analyze(00:00 UTC) 실행 1시간 후
+    - cron: '0 1 * * *'
   workflow_dispatch:
 
 env:
