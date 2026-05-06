@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build:ts": "esbuild templates/chart-logic.ts templates/chart-render.ts templates/chart-ui.ts templates/chart.ts --bundle=false --outdir=templates/dist --platform=browser --target=es2020",
+    "build:ts": "tsc -p tsconfig.frontend.json --rootDir templates --outDir templates/dist",
     "check:ts": "tsc -p tsconfig.frontend.json --noEmit"
   },
   "devDependencies": {
