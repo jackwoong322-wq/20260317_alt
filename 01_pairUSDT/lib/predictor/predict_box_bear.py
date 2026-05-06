@@ -394,6 +394,7 @@ def build_bear_chain(
     max_bear_chain: int | None = None,
     ref_bear_ranges: list | None = None,
     ref_bear_declines: list | None = None,
+    today_day: int | None = None,
 ):
     """Bear 체인 생성. max_bear_chain이 None이면 config MAX_BEAR_CHAIN 사용 (BTC는 예측값으로 전달 가능)."""
     effective_max_bear = max_bear_chain if max_bear_chain is not None else MAX_BEAR_CHAIN
@@ -436,6 +437,7 @@ def build_bear_chain(
         max_pred_lo=MAX_PRED_LO,
         ref_bear_ranges=ref_bear_ranges,
         ref_bear_declines=ref_bear_declines,
+        today_day=today_day,
     )
 
     if group_key == "BTC" and len(pred_rows) > 0:

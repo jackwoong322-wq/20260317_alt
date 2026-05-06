@@ -625,6 +625,17 @@ def _predict_one_coin_phase2(conn: Any, bundle: dict):
             bottom_lo = None
     chain_pred_rows = []
     chain_path_rows = []
+    today_day = None
+    try:
+        row = conn.execute(
+            "SELECT MAX(days_since_peak) FROM alt_cycle_data WHERE coin_id = ? AND cycle_number = ?",
+            (coin_id, max_cyc),
+        ).fetchone()
+        if row and row[0] is not None:
+            today_day = int(row[0])
+    except Exception:
+        pass
+
     if bottom_lo is not None and bottom_day is not None:
         # ACTIVE 박스(is_completed=0) hi/lo를 AI 계산 기준으로 사용
         active_rows = bundle["grp"][bundle["grp"]["is_completed"] == 0]
@@ -782,6 +793,7 @@ def _predict_one_coin_phase2(conn: Any, bundle: dict):
             ),
             ref_bear_ranges=_ref_ranges_offset,
             ref_bear_declines=_ref_declines_offset,
+            today_day=today_day,
         )
         pred_rows.extend(chain_pred_rows)
         # Bear chain 종료점에서 Bull path 연결: 하락→최저점→반등 이 한 줄로 이어지도록
