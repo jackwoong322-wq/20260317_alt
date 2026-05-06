@@ -272,7 +272,16 @@ def build_frontend_assets() -> bool:
         return False
 
     dist_dir = BASE_DIR / "templates" / "dist"
-    cmd = ["npx", "tsc", "-p", str(TS_CONFIG)]
+    cmd = [
+        "npx",
+        "tsc",
+        "-p",
+        str(TS_CONFIG),
+        "--rootDir",
+        "templates",
+        "--outDir",
+        "templates/dist",
+    ]
     print(f"[INFO] dist 갱신: {' '.join(cmd)}")
     try:
         result = subprocess.run(

@@ -1,9 +1,9 @@
 // UI interactions: coin list, buttons, search, toggles
 import { chartState } from './chart-logic.js';
 import { CYCLE_COLORS } from './chart-logic.js';
+import { drawChart } from './chart-draw.js';
 
 declare const ALL_DATA: any;
-declare function drawChart(): void;
 
 // ── Coin List UI ──────────────────────────────────────
 export function buildCoinList(filter: string = ''): void {
