@@ -53,6 +53,7 @@ def run_bear_chain(
     max_pred_lo=MAX_PRED_LO,
     ref_bear_ranges=None,
     ref_bear_declines=None,
+    today_day=None,
 ):
     """A안 개선: 이전 사이클 반등폭(range) + 하락률(decline) 기반 체인."""
     box_start = override_start_x if override_start_x is not None else bear_chain_day + 1
@@ -82,6 +83,8 @@ def run_bear_chain(
         b_end = min(b_start + dur_per_box - 1, bottom_day)
         if chain_i == N - 1:
             b_end = bottom_day
+        if chain_i == 0 and today_day is not None and b_end < today_day:
+            b_end = min(today_day, bottom_day)
         b_dur = b_end - b_start + 1
         if b_dur < 1:
             break
