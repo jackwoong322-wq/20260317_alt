@@ -11,14 +11,10 @@
 DB: Supabase (coins, ohlcv)
 """
 
-import time
 import logging
 from datetime import datetime, timedelta, timezone
 
-import requests
-
 from lib.common.binance_public import fetch_klines_paginated
-from lib.common.coingecko_ohlcv import fetch_daily_range as coingecko_fetch_daily_range
 from lib.common.config import BINANCE_DELAY, SUPABASE_ANON_KEY, SUPABASE_URL
 
 # ── 설정 ──────────────────────────────────────────────
@@ -101,6 +97,9 @@ def today_utc() -> str:
 def api_get(
     url: str, params: dict = None, retries: int = MAX_RETRIES
 ) -> dict | list | None:
+    import time
+    import requests
+
     for attempt in range(1, retries + 1):
         try:
             res = requests.get(url, params=params, timeout=30)
@@ -113,7 +112,7 @@ def api_get(
             elif res.status_code == 451:
                 log.error(
                     "HTTP 451: 접속 지역 제한 가능. Binance는 data-api.binance.vision 순차 시도 후 "
-                    "CoinGecko로 폴백합니다. 계속 실패하면 약관·네트워크를 확인하세요."
+                    "계속 실패하면 약관·네트워크를 확인하세요."
                 )
                 log.error(f"HTTP 451 | {url} | {res.text[:300]}")
                 return None
@@ -142,18 +141,13 @@ def binance_fetch_klines(symbol: str, from_date: str | None = None) -> list[list
     )
 
 
-def fetch_incremental_ohlcv_rows(
-    symbol: str, cg_coin_id: str, from_date: str, today: str
-) -> list[dict]:
-    """Binance 전 호스트 실패 시 CoinGecko market_chart 로 폴백."""
+def fetch_binance_ohlcv_rows(symbol: str, from_date: str | None) -> list[dict]:
+    """Fetch daily OHLCV rows from Binance only."""
     klines = binance_fetch_klines(symbol, from_date=from_date)
     if klines:
         return parse_binance_klines(klines)
-    log.warning(
-        "Binance kline 없음 → CoinGecko /coins/%s/market_chart (daily)",
-        cg_coin_id,
-    )
-    return coingecko_fetch_daily_range(cg_coin_id, from_date, today)
+    log.warning("Binance kline empty for %s%s", symbol, BINANCE_QUOTE)
+    return []
 
 
 def parse_binance_klines(klines: list[list]) -> list[dict]:
@@ -244,23 +238,20 @@ def main():
 
         log.info(f"[{i}/{len(coins)}] {symbol} ({coin_id})")
 
-        if not last_date:
-            log.warning(f"  ohlcv 데이터 없음 → 건너뜀")
-            skipped += 1
-            continue
+        from_date = next_date(last_date) if last_date else None
 
-        from_date = next_date(last_date)
-
-        if from_date > today:
+        if from_date is None:
+            log.info("  No existing OHLCV rows. Fetching full Binance history.")
+        elif from_date > today:
             log.info(f"  이미 최신 상태 (마지막: {last_date}) → 건너뜀")
             skipped += 1
             continue
 
         log.info(f"  마지막: {last_date} → {from_date} ~ {today} 업데이트 중...")
-        rows = fetch_incremental_ohlcv_rows(symbol, coin_id, from_date, today)
+        rows = fetch_binance_ohlcv_rows(symbol, from_date)
 
         if not rows:
-            log.warning(f"  Binance/CoinGecko {symbol} 수신 데이터 없음")
+            log.warning(f"  Binance {symbol} 수신 데이터 없음")
             skipped += 1
             continue
         rows = [r for r in rows if r["date"] < today]  # 미완성 캔들 제외
