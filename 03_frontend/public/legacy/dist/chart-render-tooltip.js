@@ -1,7 +1,7 @@
 // Crosshair tooltip rendering (per-day series values + box info)
-import { chartState } from './chart-logic.js?v=1773826372';
-import { timeToDay, findBoxAtDay } from './chart-logic.js?v=1773826372';
-import { CYCLE_COLORS, COIN_COLORS } from './chart-logic.js?v=1773826372';
+import { chartState } from './chart-logic.js';
+import { timeToDay, findBoxAtDay } from './chart-logic.js';
+import { CYCLE_COLORS, COIN_COLORS } from './chart-logic.js';
 // ── Crosshair Tooltip ─────────────────────────────────
 export function setupTooltip() {
     const tooltip = document.getElementById('crosshairTooltip');

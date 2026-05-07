@@ -6,15 +6,15 @@
  * - SRP: clearAllSeries, drawCycleForCoin 등은 각각 한 가지 책임만 수행
  * - Early Return: selectedCoins.length === 0 등 예외를 먼저 처리
  */
-import { chartState, COIN_COLORS, CYCLE_COLORS } from './chart-logic.js?v=1773826372';
-import { addMainLineSeries } from './chart-series-main.js?v=1773826372';
-import { addHighLowSeries } from './chart-series-highlow.js?v=1773826372';
-import { addBoxZoneSeries, addBoxZoneFallback, addActiveBoxExtensions } from './chart-series-boxzone.js?v=1773826372';
-import { addPredictionPaths } from './chart-series-prediction.js?v=1773826372';
-import { addBearBullSeries } from './chart-series-bearbull.js?v=1773826372';
-import { buildCycleToggles } from './chart-ui.js?v=1773826372';
-import { updateLegend, updateStats } from './chart-render-legend-stats.js?v=1773826372';
-import { clearBearBullLabels, clearBoxMarks } from './chart-render-overlays.js?v=1773826372';
+import { chartState, COIN_COLORS, CYCLE_COLORS } from './chart-logic.js';
+import { addMainLineSeries } from './chart-series-main.js';
+import { addHighLowSeries } from './chart-series-highlow.js';
+import { addBoxZoneSeries, addBoxZoneFallback, addActiveBoxExtensions } from './chart-series-boxzone.js';
+import { addPredictionPaths } from './chart-series-prediction.js';
+import { addBearBullSeries } from './chart-series-bearbull.js';
+import { updateLegend, updateStats } from './chart-render-legend-stats.js';
+import { clearBearBullLabels, clearBoxMarks } from './chart-render-overlays.js';
+import { getCycleStatus } from './chart-lazy-load.js';
 /** 시리즈 키 포맷: {coinId}_{cycleNum}_close */
 function buildCloseKey(coinId, cycleNumber) {
     return `${coinId}_${cycleNumber}_close`;
@@ -119,7 +119,6 @@ function drawCycleForCoin(state, coinId, coinData, coinIdx, cycle, legendItems) 
  */
 export function drawChart(state = chartState) {
     clearAllSeries(state);
-    buildCycleToggles();
     // F12 콘솔: 차트 그릴 때마다 항상 출력 (선택 코인 수 / 예측 데이터)
     console.log('[차트] drawChart 호출, 선택 코인 수:', state.selectedCoins.length, state.selectedCoins);
     if (state.selectedCoins.length === 0) {
@@ -132,7 +131,9 @@ export function drawChart(state = chartState) {
         const coinData = ALL_DATA[coinId];
         if (!coinData)
             return;
-        coinData.cycles.forEach((cycle) => {
+        (coinData.cycles || []).forEach((cycle) => {
+            if (getCycleStatus(coinId, Number(cycle.cycle_number)) !== 'loaded')
+                return;
             drawCycleForCoin(state, coinId, coinData, coinIdx, cycle, legendItems);
         });
     });
@@ -142,7 +143,7 @@ export function drawChart(state = chartState) {
         const coinData = ALL_DATA[coinId];
         if (!coinData)
             return;
-        coinData.cycles.forEach((c) => {
+        (coinData.cycles || []).forEach((c) => {
             const paths = c.prediction_paths;
             if (paths && (paths.bull?.length || paths.bear?.length)) {
                 const key = `${coinData.symbol}_cycle${c.cycle_number}`;

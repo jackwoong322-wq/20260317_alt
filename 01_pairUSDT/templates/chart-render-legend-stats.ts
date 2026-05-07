@@ -1,5 +1,10 @@
 // Legend & stats bar rendering
 import { chartState } from './chart-logic.js';
+import {
+  findManifestCoin,
+  getCycleDisplayName,
+  getCycleStatus,
+} from './chart-lazy-load.js';
 
 declare const ALL_DATA: any;
 
@@ -54,10 +59,37 @@ export function updateStats(): void {
     return;
   }
   const coinData = ALL_DATA[chartState.selectedCoins[0]];
-  if (!coinData) return;
+  const manifestCoin = findManifestCoin(chartState.selectedCoins[0]);
+  if (!coinData && !manifestCoin) return;
   let html = '';
-  coinData.cycles.forEach((cycle: any) => {
-    if (!chartState.activeCycles.has(Number(cycle.cycle_number))) return;
+  const cycles = manifestCoin?.cycles || coinData?.cycles || [];
+  cycles.forEach((manifestCycle: any) => {
+    const cycleNumber = Number(manifestCycle.cycle_number);
+    if (!chartState.activeCycles.has(cycleNumber)) return;
+    const cycle = (coinData?.cycles || []).find(
+      (item: any) => Number(item.cycle_number) === cycleNumber,
+    );
+    const status = getCycleStatus(chartState.selectedCoins[0], cycleNumber);
+    const statusText =
+      status === 'loading'
+        ? 'Loading cycle data'
+        : status === 'error'
+          ? 'Failed to load cycle data'
+          : status === 'empty'
+            ? 'No data for selected cycle'
+            : 'Cycle data not loaded';
+    if (status !== 'loaded') {
+      html += `
+      <div class="stat-item">
+        <div class="stat-label">${getCycleDisplayName(
+          chartState.selectedCoins[0],
+          cycleNumber,
+        ).toUpperCase()}</div>
+        <div class="stat-label" style="margin-top:2px">${statusText}</div>
+      </div>
+      `;
+      return;
+    }
     if (!cycle.data || cycle.data.length === 0) {
       html += `
       <div class="stat-item">

@@ -6,7 +6,7 @@
  * - 상수: MIN_BOX_DAYS 등은 chart-constants에서 re-export하여 일원화
  * - 순수 함수: detectBoxZones, detectBearBull는 입력만으로 출력 결정
  */
-import { MIN_BOX_DAYS, BEAR_BREAKOUT_RATIO, BULL_BREAKOUT_RATIO, BEAR_REBOUND_RATIO, BULL_DRAWDOWN_RATIO, BULL_PEAK_LOOKAHEAD_DAYS } from './chart-constants.js?v=1773826372';
+import { MIN_BOX_DAYS, BEAR_BREAKOUT_RATIO, BULL_BREAKOUT_RATIO, BEAR_REBOUND_RATIO, BULL_DRAWDOWN_RATIO, BULL_PEAK_LOOKAHEAD_DAYS } from './chart-constants.js';
 // ── Cycle Colors ──────────────────────────────────────
 export const CYCLE_COLORS = {
     1: { main: '#FF4D4D', band: 'rgba(255,77,77,0.08)' },

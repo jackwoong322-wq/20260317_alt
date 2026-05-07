@@ -1,7 +1,7 @@
 // ── Bear/Bull background area series ───────────────────
-import { chartState } from './chart-logic.js?v=1773826372';
-import { dayToTime, detectBearBull } from './chart-logic.js?v=1773826372';
-import { setSeriesDataSafe, filterValidPoints } from './chart-series-helpers.js?v=1773826372';
+import { chartState } from './chart-logic.js';
+import { dayToTime, detectBearBull } from './chart-logic.js';
+import { setSeriesDataSafe, filterValidPoints } from './chart-series-helpers.js';
 function getBearBullColors(type) {
     return type === 'BEAR'
         ? { bgColor: 'rgba(255,68,102,0.07)', lineCol: 'rgba(255,68,102,0.0)' }

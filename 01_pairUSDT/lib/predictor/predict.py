@@ -18,7 +18,7 @@ from lib.common.config import (
     MAX_BEAR_CHAIN,
     MAX_BULL_CHAIN,
 )
-from lib.common.utils import _safe_div_pct
+from lib.common.utils import _log1p, _safe_div_pct, _signed_log1p
 from lib.predictor.data import build_cycle_and_coin_stats
 from lib.predictor.predict_box_bear import build_bear_chain
 from lib.predictor.predict_bottom import calc_bottom_alt, calc_bottom_btc
@@ -87,6 +87,116 @@ def _collect_peak_rows(
             )
         )
     return rows
+
+
+def _resolve_prediction_anchor(grp: pd.DataFrame, last: pd.Series) -> dict:
+    has_active_box = int(last.get("is_completed", 1)) == 0
+    real_rows = grp[grp["is_prediction"] == 0]
+
+    if has_active_box:
+        return {
+            "has_active_box": True,
+            "prediction_box_idx": int(last["box_index"]),
+            "prediction_start_x": int(last["start_x"]),
+        }
+
+    return {
+        "has_active_box": False,
+        "prediction_box_idx": int(real_rows["box_index"].max()) + 1,
+        "prediction_start_x": int(last["end_x"]) + 1,
+    }
+
+
+def _row_with_result(row: tuple, result: str) -> tuple:
+    values = list(row)
+    values[7] = result
+    return tuple(values)
+
+
+def _reconcile_active_prediction_row(row: tuple, active: pd.Series) -> tuple:
+    """Keep the active prediction row consistent with already observed ACTIVE data."""
+    values = list(row)
+    start_x = int(values[8])
+    observed_end_x = int(active.get("end_x", values[9]) or values[9])
+    values[9] = max(int(values[9]), observed_end_x)
+
+    observed_hi = active.get("hi")
+    if observed_hi is not None and pd.notna(observed_hi):
+        observed_hi = float(observed_hi)
+        if observed_hi > float(values[10]):
+            values[10] = observed_hi
+            observed_hi_day = active.get("hi_day")
+            values[12] = (
+                int(observed_hi_day)
+                if observed_hi_day is not None and pd.notna(observed_hi_day)
+                else observed_end_x
+            )
+
+    observed_lo = active.get("lo")
+    if observed_lo is not None and pd.notna(observed_lo):
+        observed_lo = float(observed_lo)
+        if observed_lo < float(values[11]):
+            values[11] = observed_lo
+            observed_lo_day = active.get("lo_day")
+            values[13] = (
+                int(observed_lo_day)
+                if observed_lo_day is not None and pd.notna(observed_lo_day)
+                else observed_end_x
+            )
+
+    values[12] = max(start_x, min(int(values[12]), int(values[9])))
+    values[13] = max(start_x, min(int(values[13]), int(values[9])))
+    values[14] = int(values[9]) - start_x + 1
+    values[15] = _safe_div_pct(float(values[10]), float(values[11])) if float(values[11]) > 0 else 0.0
+    values[19] = _log1p(float(values[10]))
+    values[20] = _log1p(float(values[11]))
+    values[21] = _log1p(abs(float(values[15])))
+    values[22] = _log1p(float(values[14]))
+    values[23] = _signed_log1p(float(values[16]))
+    values[24] = _signed_log1p(float(values[17]))
+    values[25] = _signed_log1p(float(values[18]))
+    return tuple(values)
+
+
+def _shift_rows_after_previous_end(rows: list[tuple]) -> list[tuple]:
+    shifted = []
+    prev_end = None
+    for row in rows:
+        values = list(row)
+        if prev_end is not None and int(values[8]) <= prev_end:
+            old_start = int(values[8])
+            old_end = int(values[9])
+            delta = prev_end + 1 - old_start
+            values[8] = old_start + delta
+            values[9] = old_end + delta
+            values[12] = int(values[12]) + delta
+            values[13] = int(values[13]) + delta
+        values[14] = int(values[9]) - int(values[8]) + 1
+        values[22] = _log1p(float(values[14]))
+        prev_end = int(values[9])
+        shifted.append(tuple(values))
+    return shifted
+
+
+def _build_active_bull_path_rows(row: tuple, active: pd.Series) -> list[tuple]:
+    start_x = int(row[8])
+    end_x = int(row[9])
+    cur_day = int(active.get("start_x", start_x) or start_x)
+    cur_val = active.get("lo")
+    if cur_val is None or pd.isna(cur_val):
+        cur_val = row[11]
+    return build_bull_path_rows(
+        row[0],
+        active,
+        int(row[3]),
+        cur_day,
+        float(cur_val),
+        start_x,
+        end_x,
+        float(row[10]),
+        float(row[11]),
+        int(row[12]),
+    )
 
 
 def _apply_btc_anchor_cap(last, btc_anchor, pred_hi_bull, pred_lo_bull):
@@ -388,9 +498,16 @@ def _predict_one_coin_phase1(
         return None
     phase_proba = phase_models[TARGET_PHASE].predict_proba(X_pred)[0]
     prob_bear, prob_bull = float(phase_proba[0]), float(phase_proba[1])
-    reg_key = group_key + ("_BEAR" if prob_bear >= prob_bull else "_BULL")
-    reg_models = models.get(reg_key) or models.get("ALT_BEAR") or models.get("ALT_BULL")
-    if reg_models is None or TARGET_HI not in reg_models:
+    preferred_reg_key = group_key + ("_BEAR" if prob_bear >= prob_bull else "_BULL")
+    reg_key = ""
+    reg_models = None
+    for candidate_reg_key in (preferred_reg_key, "ALT_BEAR", "ALT_BULL"):
+        candidate_models = models.get(candidate_reg_key)
+        if candidate_models is not None and TARGET_HI in candidate_models:
+            reg_key = candidate_reg_key
+            reg_models = candidate_models
+            break
+    if reg_models is None:
         return None
     group_models = {
         TARGET_PHASE: phase_models[TARGET_PHASE],
@@ -472,10 +589,11 @@ def _predict_one_coin_phase1(
             coin_id, last, max_cyc, peak_hi, peak_day_pred, bottom_lo, bottom_day
         )
     )
-    start_x = int(last["end_x"]) + 1
+    anchor = _resolve_prediction_anchor(grp, last)
+    start_x = anchor["prediction_start_x"]
     ref_lo = float(last["lo"]) if last["lo"] else 100.0
     cycle_lo = float(grp["lo"].min()) if not grp.empty else ref_lo
-    next_box_idx = int(grp[grp["is_prediction"] == 0]["box_index"].max()) + 1
+    next_box_idx = anchor["prediction_box_idx"]
     return {
         "last": last,
         "coin_id": coin_id,
@@ -512,6 +630,7 @@ def _predict_one_coin_phase1(
         "ref_lo": ref_lo,
         "cycle_lo": cycle_lo,
         "next_box_idx": next_box_idx,
+        "has_active_box": anchor["has_active_box"],
         "_verbose": _verbose,
         "prob_bear": prob_bear,
         "prob_bull": prob_bull,
@@ -579,24 +698,6 @@ def _predict_one_coin_phase2(conn: Any, bundle: dict):
             cycle_prediction.guard_applied["bull"],
         )
     bundle["cycle_prediction"] = cycle_prediction
-    if int(last.get("is_completed", 1)) == 0:
-        active_result = "BEAR_ACTIVE" if not pred_is_bull else "BULL_ACTIVE"
-        conn.execute(
-            """UPDATE coin_analysis_results SET result = ?
-               WHERE coin_id = ? AND cycle_number = ? AND is_completed = 0 AND is_prediction = 0""",
-            (active_result, coin_id, max_cyc),
-        )
-        # 예측 후 active 박스의 저점을 예측된 최저점(bottom)으로 변경 (화살표 방향: 현재 저점 → 예측 저점)
-        if bottom_lo is not None and bottom_day is not None:
-            conn.execute(
-                """UPDATE coin_analysis_results SET lo = ?, lo_day = ?
-                   WHERE coin_id = ? AND cycle_number = ? AND is_completed = 0 AND is_prediction = 0""",
-                (bottom_lo, bottom_day, coin_id, max_cyc),
-            )
-        conn.commit()
-        log.info(
-            "  [%s] ACTIVE 박스 result 업데이트: %s", last["symbol"], active_result
-        )
     pred_hi_bull, pred_lo_bull = _apply_btc_anchor_cap(
         last, bundle["btc_anchor"], pred_hi_bull, pred_lo_bull
     )
@@ -617,6 +718,11 @@ def _predict_one_coin_phase2(conn: Any, bundle: dict):
     )
     bull_meta["next_box_idx"] = next_box_idx
     pred_rows, path_rows = [], []
+    has_pre_bear_bull_placeholder = True
+    if bundle.get("has_active_box"):
+        bull_row = _row_with_result(bull_row, "PRED_BULL_ACTIVE")
+        bull_row = _reconcile_active_prediction_row(bull_row, last)
+        bull_path_rows = _build_active_bull_path_rows(bull_row, last)
     pred_rows.append(bull_row)
     path_rows = list(bull_path_rows)
     if bottom_lo is not None and bottom_day is not None:
@@ -635,6 +741,15 @@ def _predict_one_coin_phase2(conn: Any, bundle: dict):
             today_day = int(row[0])
     except Exception:
         pass
+    if bundle.get("has_active_box"):
+        observed_active_end = int(last["end_x"])
+        today_day = (
+            max(today_day, observed_active_end)
+            if today_day is not None
+            else observed_active_end
+        )
+        if bottom_day is not None and bottom_day < today_day:
+            bottom_day = today_day
 
     if bottom_lo is not None and bottom_day is not None:
         # ACTIVE 박스(is_completed=0) hi/lo를 AI 계산 기준으로 사용
@@ -770,6 +885,7 @@ def _predict_one_coin_phase2(conn: Any, bundle: dict):
             _ref_bull_ranges_offset,
             _ref_bull_pullbacks_offset,
         )
+        first_bear_box_start_x = start_x if bundle.get("has_active_box") else bear_box_start_x
         chain_pred_rows, chain_path_rows = build_bear_chain(
             coin_id=coin_id,
             last=last,
@@ -783,7 +899,7 @@ def _predict_one_coin_phase2(conn: Any, bundle: dict):
             avg_cycle_days=bundle["avg_cycle_days"],
             models=bundle["models"],
             group_key=bundle["group_key"],
-            box_start_x=bear_box_start_x,
+            box_start_x=first_bear_box_start_x,
             active_box_hi=active_hi,
             active_box_lo=active_lo,
             max_bear_chain=(
@@ -795,6 +911,17 @@ def _predict_one_coin_phase2(conn: Any, bundle: dict):
             ref_bear_declines=_ref_declines_offset,
             today_day=today_day,
         )
+        if bundle.get("has_active_box") and chain_pred_rows:
+            chain_pred_rows[0] = _row_with_result(
+                chain_pred_rows[0], "PRED_BEAR_ACTIVE"
+            )
+            chain_pred_rows[0] = _reconcile_active_prediction_row(
+                chain_pred_rows[0], last
+            )
+            chain_pred_rows = _shift_rows_after_previous_end(chain_pred_rows)
+        if chain_pred_rows and has_pre_bear_bull_placeholder:
+            pred_rows.pop(0)
+            has_pre_bear_bull_placeholder = False
         pred_rows.extend(chain_pred_rows)
         # Bear chain 종료점에서 Bull path 연결: 하락→최저점→반등 이 한 줄로 이어지도록
         if chain_path_rows:
@@ -832,7 +959,9 @@ def _predict_one_coin_phase2(conn: Any, bundle: dict):
                     ref_bull_pullbacks=_ref_bull_pullbacks_offset,
                 )
                 if bull_chain_rows:
-                    pred_rows.pop(0)
+                    if has_pre_bear_bull_placeholder:
+                        pred_rows.pop(0)
+                        has_pre_bear_bull_placeholder = False
                     pred_rows.extend(bull_chain_rows)
                     bull_meta["bull_start"] = bottom_day + 1
                     bull_meta["bull_end"] = peak_day_pred + max(1, pred_dur_bull // 2)
@@ -868,7 +997,9 @@ def _predict_one_coin_phase2(conn: Any, bundle: dict):
                     )
             else:
                 # peak 없음: 단일 Bull 박스만 최저점 다음날부터
-                pred_rows.pop(0)
+                if has_pre_bear_bull_placeholder:
+                    pred_rows.pop(0)
+                    has_pre_bear_bull_placeholder = False
                 bull_row_after, _, _ = build_bull_scenario(
                     coin_id,
                     last,
@@ -1004,8 +1135,16 @@ def predict_outputs(
     peak_models: dict,
 ) -> tuple[list[tuple], list[tuple], list[tuple], int, int]:
 
+    if "cycle_name" in df_all.columns:
+        current_df = df_all[
+            df_all["cycle_name"]
+            .astype(str)
+            .str.contains("Current", case=False, na=False)
+        ]
+    else:
+        current_df = df_all
     current_cycles = (
-        df_all.groupby("coin_id")["cycle_number"]
+        current_df.groupby("coin_id")["cycle_number"]
         .max()
         .reset_index()
         .rename(columns={"cycle_number": "max_cycle"})
@@ -1031,13 +1170,8 @@ def predict_outputs(
         )
         if grp.empty:
             continue
-
-        active = grp[grp["is_completed"] == 0]
-        completed = grp[grp["is_completed"] == 1]
-        # ACTIVE 박스 전 completed 박스를 last로 사용 (그 다음부터 예측)
-        if not active.empty and not completed.empty:
-            last = completed.iloc[-1]
-        elif not active.empty:
+        active = grp[grp["is_completed"] == 0]
+        if not active.empty:
             last = active.iloc[-1]
         else:
             last = grp.iloc[-1]

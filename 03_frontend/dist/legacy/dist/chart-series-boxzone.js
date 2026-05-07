@@ -1,8 +1,8 @@
 // ── Box zone series (hi/lo lines, fill area, active extension) ─────────────
-import { chartState } from './chart-logic.js?v=1773826372';
-import { dayToTime, detectBoxZones } from './chart-logic.js?v=1773826372';
-import { setSeriesDataSafe, filterValidPoints } from './chart-series-helpers.js?v=1773826372';
-import { renderBoxMarks } from './chart-render-overlays.js?v=1773826372';
+import { chartState } from './chart-logic.js';
+import { dayToTime, detectBoxZones } from './chart-logic.js';
+import { setSeriesDataSafe, filterValidPoints } from './chart-series-helpers.js';
+import { renderBoxMarks } from './chart-render-overlays.js';
 // z.hi / z.lo / z.startX / z.endX 가 하나라도 NaN/null 이면 skip
 function isValidZone(z) {
     return (z != null &&
@@ -52,7 +52,8 @@ function addBoxFillSeries(z, zi, fillTop, fillBot, coinId, coinData, cycle, cycl
     chartState.seriesMap[`${coinId}_${cycle.cycle_number}_bfill${zi}`] = fillSeries;
 }
 function addActiveBoxExtensionForZone(z, coinId, coinData, cycle, cycleNum, lastRealDay, lastRealClose) {
-    const actBear = z.result === 'BEAR_ACTIVE';
+    const result = String(z.result || '').toUpperCase();
+    const actBear = result === 'BEAR_ACTIVE' || result === 'PRED_BEAR_ACTIVE';
     const actColor = actBear ? 'rgba(255,80,100,0.80)' : 'rgba(255,184,0,0.80)';
     const dur = z.endX - z.startX;
     const hiDay = z.hiDay != null ? z.hiDay : z.startX + Math.floor(dur / 4);
@@ -123,7 +124,9 @@ export function addActiveBoxExtensions(coinId, coinData, cycle, cycleNum) {
     const lastRealDay = cycle.data[cycle.data.length - 1]?.x ?? 0;
     const lastRealClose = cycle.data[cycle.data.length - 1]?.close ?? 100;
     cycle.box_zones.forEach((z) => {
-        const isAct = z.result === 'BEAR_ACTIVE' || z.result === 'BULL_ACTIVE';
+        const result = String(z.result || '').toUpperCase();
+        const isAct = result === 'BEAR_ACTIVE' || result === 'BULL_ACTIVE' ||
+            result === 'PRED_BEAR_ACTIVE' || result === 'PRED_BULL_ACTIVE';
         if (!isAct || z.endX <= lastRealDay)
             return;
         if (!isValidZone(z))

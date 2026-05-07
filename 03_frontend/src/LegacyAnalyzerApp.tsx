@@ -1,16 +1,52 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? ''
+const BASE_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 
-function buildShell(html: string, data: unknown) {
-  return html.replace('__CHART_DATA__', JSON.stringify(data))
+type DashboardMeta = {
+  data_version?: string
+  generated_at?: string
+  cache_status?: string
 }
 
-async function loadDashboardData() {
-  const apiRes = await fetch(`${BASE_URL}/api/dashboard-data`)
+type DashboardInitialResponse = DashboardMeta & {
+  data: unknown
+}
+
+function assertPlaceholderReplaced(html: string) {
+  const remainingPlaceholders = [
+    '"__LEGACY_CHART_DATA__"',
+    '"__DASHBOARD_META__"',
+    '"__DASHBOARD_MANIFEST__"',
+    '"__API_BASE_URL__"',
+  ].filter((placeholder) => html.includes(placeholder))
+
+  if (remainingPlaceholders.length > 0) {
+    throw new Error(`Failed to inject legacy shell placeholders: ${remainingPlaceholders.join(', ')}`)
+  }
+}
+
+function buildShell(html: string, manifestResponse: unknown, initialResponse: DashboardInitialResponse) {
+  const meta: DashboardMeta = {
+    data_version: initialResponse.data_version,
+    generated_at: initialResponse.generated_at,
+    cache_status: initialResponse.cache_status,
+  }
+
+  const shellHtml = html
+    .replace('"__LEGACY_CHART_DATA__"', JSON.stringify(initialResponse.data))
+    .replace('"__DASHBOARD_META__"', JSON.stringify(meta))
+    .replace('"__DASHBOARD_MANIFEST__"', JSON.stringify(manifestResponse))
+    .replace('"__API_BASE_URL__"', JSON.stringify(BASE_URL))
+
+  assertPlaceholderReplaced(shellHtml)
+  return shellHtml
+}
+
+async function fetchJson<T>(path: string): Promise<T> {
+  const apiRes = await fetch(`${BASE_URL}${path}`)
   if (!apiRes.ok) {
-    throw new Error(`Failed to load dashboard data: ${apiRes.status} ${apiRes.statusText}`)
+    throw new Error(`Failed to load ${path}: ${apiRes.status} ${apiRes.statusText}`)
   }
   return apiRes.json()
 }
@@ -28,15 +64,19 @@ export default function LegacyAnalyzerApp() {
       setError(null)
 
       try {
-        const shellRes = await fetch('/legacy/chart-shell-v2.html')
+        const [shellRes, manifestResponse, initialResponse] = await Promise.all([
+          fetch('/legacy/chart-shell-v2.html'),
+          fetchJson<unknown>('/api/dashboard-manifest'),
+          fetchJson<DashboardInitialResponse>('/api/dashboard-initial-data'),
+        ])
 
         if (!shellRes.ok) {
           throw new Error('Failed to load legacy chart shell')
         }
 
-        const [shellHtml, data] = await Promise.all([shellRes.text(), loadDashboardData()])
+        const shellHtml = await shellRes.text()
         if (!cancelled) {
-          setSrcDoc(buildShell(shellHtml, data))
+          setSrcDoc(buildShell(shellHtml, manifestResponse, initialResponse))
         }
       } catch (err) {
         if (!cancelled) {

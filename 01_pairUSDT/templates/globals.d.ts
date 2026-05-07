@@ -1,6 +1,20 @@
 declare const LightweightCharts: any;
 declare const ALL_DATA: any;
 
+interface Window {
+  __LEGACY_CHART_DATA__?: any;
+  __DASHBOARD_META__?: any;
+  __DASHBOARD_MANIFEST__?: any;
+  __API_BASE_URL__?: string;
+  __DASHBOARD_LOAD_STATE__?: {
+    loadedCycles: Set<string>;
+    loadingCycles: Map<string, Promise<void>>;
+    loadError: Map<string, string>;
+  } | null;
+  ensureCycleLoaded?: (coinId: string, cycleNumber: number) => Promise<void>;
+  getCycleStatus?: (coinId: string, cycleNumber: number) => string;
+}
+
 // 전역에서 사용되는 차트/오버레이 함수 및 상태 최소 선언
 declare function drawChart(): void;
 declare function clearBoxMarks(): void;

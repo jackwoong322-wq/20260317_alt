@@ -1,4 +1,4 @@
-"""BEAR scenario and chain construction."""
+﻿"""BEAR scenario and chain construction."""
 
 import logging
 
@@ -64,7 +64,7 @@ def build_bear_scenario(
     )
     if str(last["symbol"]).upper() in {"BTC", "ETH", "XRP"}:
         print(
-            f"  ▶ PRED_BEAR  box#{next_box_idx+1}"
+            f"  ▶ PRED_BEAR  box#{next_box_idx}"
             f"  day {bear_start}~{bear_end} ({dur_bear}d)"
             f"  hi={bear_hi:.2f}%  lo={bear_lo:.2f}%  range={range_bear:.1f}%"
         )
@@ -82,7 +82,7 @@ def _make_bear_row_single(
         int(last["coin_rank"]),
         max_cyc,
         str(last["cycle_name"]),
-        next_box_idx + 1,
+        next_box_idx,
         "BEAR",
         "PRED_BEAR",
         bear_start,
@@ -312,6 +312,7 @@ def _build_bear_chain_heuristic(
     max_bear_chain: int = MAX_BEAR_CHAIN,
     ref_bear_ranges: list | None = None,
     ref_bear_declines: list | None = None,
+    today_day: int | None = None,
 ) -> tuple[list, list]:
     """휴리스틱 Bear 체인. lo→hi 반등폭=ref_bear_ranges, hi→lo 하락률=ref_bear_declines."""
     start_lo = min(float(last["lo"]) if last.get("lo") and np.isfinite(last["lo"]) else cur_val, active_box_lo or 999.0) if active_box_lo else (float(last["lo"]) if last.get("lo") and np.isfinite(last["lo"]) else cur_val)
@@ -324,14 +325,22 @@ def _build_bear_chain_heuristic(
     if total_days < 1:
         return [], []
     n_boxes = min(max_bear_chain, max(1, (total_days + MIN_BEAR_DURATION - 1) // MIN_BEAR_DURATION))
+    if today_day is not None and today_day > box_start_x and today_day < bottom_day:
+        future_capacity = max(0, (bottom_day - today_day) // MIN_BEAR_DURATION)
+        n_boxes = min(n_boxes, 1 + future_capacity)
     days_per_box = max(MIN_BEAR_DURATION, total_days // n_boxes)
     for chain_i in range(n_boxes):
         if bear_chain_day >= bottom_day:
             break
         b_start = box_start_x if chain_i == 0 else bear_chain_day + 1
-        b_end = min(b_start + days_per_box - 1, bottom_day)
+        remaining_boxes = max(1, n_boxes - chain_i)
+        remaining_days = max(1, bottom_day - b_start + 1)
+        step_days = max(MIN_BEAR_DURATION, remaining_days // remaining_boxes)
+        b_end = min(b_start + step_days - 1, bottom_day)
         if chain_i == n_boxes - 1:
             b_end = bottom_day
+        if chain_i == 0 and today_day is not None and b_end < today_day:
+            b_end = min(today_day, bottom_day)
         b_dur = b_end - b_start + 1
         if b_dur < 1:
             break
@@ -410,6 +419,7 @@ def build_bear_chain(
             max_bear_chain=effective_max_bear,
             ref_bear_ranges=ref_bear_ranges,
             ref_bear_declines=ref_bear_declines,
+            today_day=today_day,
         )
 
     bear_reg_feat_cols = FEATURE_COLS_BTC_REG if group_key == "BTC" else FEATURE_COLS_BEAR

@@ -12,9 +12,9 @@ import { addHighLowSeries } from './chart-series-highlow.js';
 import { addBoxZoneSeries, addBoxZoneFallback, addActiveBoxExtensions } from './chart-series-boxzone.js';
 import { addPredictionPaths } from './chart-series-prediction.js';
 import { addBearBullSeries } from './chart-series-bearbull.js';
-import { buildCycleToggles } from './chart-ui.js';
 import { updateLegend, updateStats } from './chart-render-legend-stats.js';
 import { clearBearBullLabels, clearBoxMarks } from './chart-render-overlays.js';
+import { getCycleStatus } from './chart-lazy-load.js';
 
 declare const ALL_DATA: any;
 
@@ -144,7 +144,6 @@ function drawCycleForCoin(
  */
 export function drawChart(state: ChartState = chartState): void {
   clearAllSeries(state);
-  buildCycleToggles();
 
   // F12 콘솔: 차트 그릴 때마다 항상 출력 (선택 코인 수 / 예측 데이터)
   console.log('[차트] drawChart 호출, 선택 코인 수:', state.selectedCoins.length, state.selectedCoins);
@@ -161,7 +160,8 @@ export function drawChart(state: ChartState = chartState): void {
     const coinData = ALL_DATA[coinId];
     if (!coinData) return;
 
-    coinData.cycles.forEach((cycle: any) => {
+    (coinData.cycles || []).forEach((cycle: any) => {
+      if (getCycleStatus(coinId, Number(cycle.cycle_number)) !== 'loaded') return;
       drawCycleForCoin(state, coinId, coinData, coinIdx, cycle, legendItems);
     });
   });
@@ -171,7 +171,7 @@ export function drawChart(state: ChartState = chartState): void {
   state.selectedCoins.forEach((coinId: string) => {
     const coinData = ALL_DATA[coinId];
     if (!coinData) return;
-    coinData.cycles.forEach((c: any) => {
+    (coinData.cycles || []).forEach((c: any) => {
       const paths = c.prediction_paths;
       if (paths && (paths.bull?.length || paths.bear?.length)) {
         const key = `${coinData.symbol}_cycle${c.cycle_number}`;

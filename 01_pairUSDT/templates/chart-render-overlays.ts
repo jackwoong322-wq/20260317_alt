@@ -117,10 +117,11 @@ export function renderBoxMarks(
     zones.forEach((z: any, zi: number) => {
       const isBear = z.phase === 'BEAR';
       const isPrediction = z.is_prediction === 1; // 예측 박스 플래그
+      const result = String(z.result || '').toUpperCase();
       const isActive =
-        !isPrediction &&
-        (z.result === 'BEAR_ACTIVE' || z.result === 'BULL_ACTIVE');
-      const isActiveBear = z.result === 'BEAR_ACTIVE';
+        (result === 'BEAR_ACTIVE' || result === 'BULL_ACTIVE' ||
+         result === 'PRED_BEAR_ACTIVE' || result === 'PRED_BULL_ACTIVE');
+      const isActiveBear = result === 'BEAR_ACTIVE' || result === 'PRED_BEAR_ACTIVE';
 
       const prevBox = zones[zi - 1] || null;
       const refHighForLow = isBear ? (prevBox ? prevBox.hi : 100) : z.hi;

@@ -75,7 +75,8 @@ function addActiveBoxExtensionForZone(
   z: any, coinId: string, coinData: any, cycle: any, cycleNum: number,
   lastRealDay: number, lastRealClose: number,
 ): void {
-  const actBear = z.result === 'BEAR_ACTIVE';
+  const result = String(z.result || '').toUpperCase();
+  const actBear = result === 'BEAR_ACTIVE' || result === 'PRED_BEAR_ACTIVE';
   const actColor = actBear ? 'rgba(255,80,100,0.80)' : 'rgba(255,184,0,0.80)';
   const dur = z.endX - z.startX;
   const hiDay = z.hiDay != null ? z.hiDay : z.startX + Math.floor(dur / 4);
@@ -152,7 +153,10 @@ export function addActiveBoxExtensions(
   const lastRealDay = cycle.data[cycle.data.length - 1]?.x ?? 0;
   const lastRealClose = cycle.data[cycle.data.length - 1]?.close ?? 100;
   cycle.box_zones.forEach((z: any) => {
-    const isAct = z.result === 'BEAR_ACTIVE' || z.result === 'BULL_ACTIVE';
+    const result = String(z.result || '').toUpperCase();
+    const isAct =
+      result === 'BEAR_ACTIVE' || result === 'BULL_ACTIVE' ||
+      result === 'PRED_BEAR_ACTIVE' || result === 'PRED_BULL_ACTIVE';
     if (!isAct || z.endX <= lastRealDay) return;
     if (!isValidZone(z)) return;
     addActiveBoxExtensionForZone(z, coinId, coinData, cycle, cycleNum, lastRealDay, lastRealClose);

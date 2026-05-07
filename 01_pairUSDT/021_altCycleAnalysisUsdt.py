@@ -1,33 +1,11 @@
 """
-알트코인 4년 주기 사이클 분석기 (USDT 페어)
+BTC cycle template analyzer for USDT pairs.
 
-- 데이터 소스: Supabase (ohlcv 테이블, USDT 페어)
-- 결과 저장:
-    alt_cycle_data    : 일별 OHLCV (기존)
-    alt_cycle_summary : 코인별 사이클 Peak/Low 요약 (신규)
-
-Peak 확정 로직:
-  1. 전체 데이터 시작점부터 날짜 순으로 순회
-  2. 각 날짜에 대해 Peak 조건 체크:
-     ① 이후 1년 동안 고점 갱신 없음
-     ② 이후 3년 안에 50% 이상 하락한 시점 존재
-  3. 조건 만족하는 첫 날짜 = Peak 확정
-  4. 다음 탐색은 Peak 이후 3년 뒤부터
-  5. 반복
-
-증분 업데이트 로직:
-  - alt_cycle_summary에서 low_date IS NULL인 row = current cycle
-  - 직전 확정 Peak 이후 2년 시점부터 ohlcv만 로드
-  - current cycle 데이터/summary만 재계산 후 저장
-  - current peak가 확정 조건 충족 시 전체 재실행으로 fallback
-
-alt_cycle_summary 구조:
-  peak_date / peak_price
-  peak_pct_from_low  : 직전 저점 대비 +%  (from prev low)
-  low_date  / low_price : 이 Peak ~ 다음 Peak 사이 최저점 (current cycle은 미설정)
-  low_pct_from_peak  : 직전 고점 대비 -%  (from prev peak)
-  prev_peak_date / prev_peak_price
-  prev_low_date  / prev_low_price
+- Data source: Supabase ohlcv table
+- Result tables: alt_cycle_data, alt_cycle_summary
+- BTC cycle_number/cycle_name/peak_date templates are applied to every alt.
+- Alt cycles are skipped when no exact OHLCV row exists on the BTC cycle start date.
+- Alt close/high/low rates are normalized by that alt close on the BTC cycle start date.
 """
 
 import pandas as pd
@@ -66,11 +44,6 @@ def date_to_ms(date_str: str) -> int:
 
 def ms_to_date(ts_ms: int) -> str:
     return datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).strftime("%Y/%m/%d")
-
-
-def ms_to_iso(ts_ms: int) -> str:
-    """timestamp(ms) → YYYY-MM-DD"""
-    return datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
 
 
 def slash_to_iso(date_str: str | None) -> str | None:
@@ -240,151 +213,191 @@ def find_all_peaks(df: pd.DataFrame, symbol: str = "") -> list[tuple]:
     return peaks
 
 
-# ══════════════════════════════════════════════════════
-# Low 탐지 (Peak ~ 다음Peak 구간 최저점)
-# ══════════════════════════════════════════════════════
+# ------------------------------------------------------
+# BTC-template cycle calculation
+# ------------------------------------------------------
 
 
-def find_low_between(df: pd.DataFrame, from_ts: int, to_ts: int | None = None) -> tuple:
-    """
-    from_ts ~ to_ts 구간에서 최저점 날짜/가격 반환
-    to_ts=None 이면 끝까지
-    """
-    mask = df["timestamp"] > from_ts
-    if to_ts:
-        mask &= df["timestamp"] < to_ts
-    seg = df[mask]
-    if seg.empty:
-        return None, None
-    idx = seg["low"].idxmin()  # type: ignore[union-attr]
-    low_ts = seg.loc[idx, "timestamp"]
-    low_price = seg.loc[idx, "low"]
-    return int(low_ts), float(low_price)
+def find_btc_coin_id(coins: list[tuple[str, str]]) -> str | None:
+    for coin_id, symbol in coins:
+        if str(symbol).upper() == "BTC":
+            return coin_id
+    return None
 
 
-# ══════════════════════════════════════════════════════
-# 사이클 데이터 계산
-# ══════════════════════════════════════════════════════
+def build_btc_cycle_templates(btc_df: pd.DataFrame) -> list[dict]:
+    peaks = find_all_peaks(btc_df, "BTC")
+    if not peaks:
+        return []
 
+    last_peak_ts, _last_peak_high = peaks[-1]
+    current_search_ts = last_peak_ts + NEXT_SEARCH_MS
+    today_ts = int(datetime.now(timezone.utc).timestamp() * 1000)
+    current_df = btc_df[
+        (btc_df["timestamp"] >= current_search_ts)
+        & (btc_df["timestamp"] <= today_ts)
+    ]
 
-def calculate_cycle(
-    df: pd.DataFrame,
-    peak_ts: int,
-    peak_high: float,
-    cycle_num: int,
-    next_peak_ts: int | None = None,
-    is_current: bool = False,
-) -> list[dict]:
-    mask = df["timestamp"] >= peak_ts
-    if next_peak_ts:
-        mask &= df["timestamp"] < next_peak_ts
+    if not current_df.empty:
+        current_peak_idx = current_df["high"].idxmax()  # type: ignore[union-attr]
+        current_peak_ts = int(btc_df.loc[current_peak_idx, "timestamp"])
+        current_peak_high = float(btc_df.loc[current_peak_idx, "high"])
+        print(
+            f"    [BTC Current Peak] {ms_to_date(current_peak_ts)}"
+            f"  @ {current_peak_high:>14,.4f}"
+        )
+        peaks.append((current_peak_ts, current_peak_high))
 
-    cycle_df = df[mask].copy().reset_index(drop=True)
-    peak_date = ms_to_date(peak_ts)
-    cycle_name = make_cycle_name(peak_ts, is_current=is_current)
-    records = []
-
-    for i, row in cycle_df.iterrows():
-        records.append(
+    templates = []
+    for idx, (peak_ts, peak_high) in enumerate(peaks):
+        cycle_num = idx + 1
+        next_peak_ts = peaks[idx + 1][0] if idx + 1 < len(peaks) else None
+        is_current = next_peak_ts is None
+        templates.append(
             {
                 "cycle_number": cycle_num,
-                "cycle_name": cycle_name,
-                "days_since_peak": i,
-                "timestamp": ms_to_date(int(row["timestamp"])),
+                "cycle_name": make_cycle_name(peak_ts, is_current=is_current),
+                "peak_ts": int(peak_ts),
+                "peak_date": ms_to_date(int(peak_ts)),
+                "peak_high": float(peak_high),
+                "next_peak_ts": int(next_peak_ts) if next_peak_ts else None,
+                "is_current": is_current,
+            }
+        )
+    return templates
+
+
+def get_row_at_timestamp(df: pd.DataFrame, ts: int):
+    rows = df[df["timestamp"] == ts]
+    if rows.empty:
+        return None
+    return rows.iloc[0]
+
+
+def _cycle_window_df(df: pd.DataFrame, template: dict) -> pd.DataFrame:
+    peak_ts = int(template["peak_ts"])
+    next_peak_ts = template.get("next_peak_ts")
+    mask = df["timestamp"] >= peak_ts
+    if next_peak_ts:
+        mask &= df["timestamp"] < int(next_peak_ts)
+    return df[mask].copy().reset_index(drop=True)
+
+
+def calculate_cycle_by_btc_template(
+    df: pd.DataFrame,
+    template: dict,
+) -> list[dict]:
+    start_row = get_row_at_timestamp(df, int(template["peak_ts"]))
+    if start_row is None:
+        return []
+
+    base_close = float(start_row["close"])
+    if base_close <= 0:
+        return []
+
+    cycle_df = _cycle_window_df(df, template)
+    if cycle_df.empty:
+        return []
+
+    peak_ts = int(template["peak_ts"])
+    records = []
+    for _, row in cycle_df.iterrows():
+        row_ts = int(row["timestamp"])
+        records.append(
+            {
+                "cycle_number": int(template["cycle_number"]),
+                "cycle_name": str(template["cycle_name"]),
+                "days_since_peak": int((row_ts - peak_ts) // ONE_DAY_MS),
+                "timestamp": ms_to_date(row_ts),
                 "close_price": row["close"],
                 "low_price": row["low"],
                 "high_price": row["high"],
-                "close_rate": (row["close"] / peak_high) * 100,
-                "low_rate": (row["low"] / peak_high) * 100,
-                "high_rate": (row["high"] / peak_high) * 100,
-                "peak_date": peak_date,
-                "peak_price": peak_high,
+                "close_rate": (row["close"] / base_close) * 100,
+                "low_rate": (row["low"] / base_close) * 100,
+                "high_rate": (row["high"] / base_close) * 100,
+                "peak_date": template["peak_date"],
+                "peak_price": base_close,
             }
         )
-
     return records
 
 
-# ══════════════════════════════════════════════════════
-# Summary 계산
-# ══════════════════════════════════════════════════════
-
-
-def build_summary(df: pd.DataFrame, peaks: list[tuple]) -> list[dict]:
-    """
-    peaks: [(peak_ts, peak_high), ...]
-    각 사이클별 Peak/Low 요약 생성
-    """
+def build_summary_by_btc_templates(
+    df: pd.DataFrame,
+    templates: list[dict],
+) -> list[dict]:
     summaries = []
+    prev_summary = None
 
-    for idx, (peak_ts, peak_high) in enumerate(peaks):
-        cycle_num = idx + 1
-        is_last = idx == len(peaks) - 1
-        next_peak_ts = peaks[idx + 1][0] if idx + 1 < len(peaks) else None
-        is_current = is_last and (next_peak_ts is None)
-        cycle_name = make_cycle_name(peak_ts, is_current=is_current)
+    for template in templates:
+        start_row = get_row_at_timestamp(df, int(template["peak_ts"]))
+        if start_row is None:
+            continue
 
-        # ── Low: 이 Peak ~ 다음 Peak 사이 최저점 (current cycle은 아직 끝나지 않았으므로 저점 미설정) ──
-        if is_current:
-            low_ts, low_price = None, None
+        base_close = float(start_row["close"])
+        if base_close <= 0:
+            continue
+
+        cycle_df = _cycle_window_df(df, template)
+        if cycle_df.empty:
+            continue
+
+        if template.get("is_current"):
+            low_ts, low_price, low_pct_from_peak = None, None, None
         else:
-            low_ts, low_price = find_low_between(df, peak_ts, next_peak_ts)
+            low_idx = cycle_df["low"].idxmin()  # type: ignore[union-attr]
+            low_ts = int(cycle_df.loc[low_idx, "timestamp"])
+            low_price = float(cycle_df.loc[low_idx, "low"])
+            low_pct_from_peak = (
+                ((low_price - base_close) / base_close) * 100
+                if base_close > 0
+                else None
+            )
 
-        # ── 직전 Peak ──
-        if idx > 0:
-            prev_peak_ts, prev_peak_price = peaks[idx - 1]
-            prev_peak_date = ms_to_date(prev_peak_ts)
-        else:
-            prev_peak_ts = None
-            prev_peak_price = None
-            prev_peak_date = None
-
-        # ── 직전 Low: 이전 Peak ~ 이 Peak 사이 최저점 ──
-        prev_from_ts = prev_peak_ts if prev_peak_ts else df["timestamp"].min() - 1
-        prev_low_ts, prev_low_price = find_low_between(df, prev_from_ts, peak_ts)
-
-        # ── % 계산 ──
-        if prev_low_price and prev_low_price > 0:
-            peak_pct_from_low = ((peak_high - prev_low_price) / prev_low_price) * 100
+        if prev_summary and prev_summary.get("low_price"):
+            prev_low_price = float(prev_summary["low_price"])
+            peak_pct_from_low = (
+                ((base_close - prev_low_price) / prev_low_price) * 100
+                if prev_low_price > 0
+                else None
+            )
         else:
             peak_pct_from_low = None
 
-        if low_price and peak_high > 0:
-            low_pct_from_peak = ((low_price - peak_high) / peak_high) * 100
-        else:
-            low_pct_from_peak = None
-
-        summaries.append(
-            {
-                "cycle_number": cycle_num,
-                "cycle_name": cycle_name,
-                "peak_date": ms_to_date(peak_ts),
-                "peak_price": peak_high,
-                "peak_pct_from_low": (
-                    round(peak_pct_from_low, 2)
-                    if peak_pct_from_low is not None
-                    else None
-                ),
-                "low_date": ms_to_date(low_ts) if low_ts else None,
-                "low_price": low_price,
-                "low_pct_from_peak": (
-                    round(low_pct_from_peak, 2)
-                    if low_pct_from_peak is not None
-                    else None
-                ),
-                "prev_peak_date": prev_peak_date,
-                "prev_peak_price": prev_peak_price,
-                "prev_low_date": ms_to_date(prev_low_ts) if prev_low_ts else None,
-                "prev_low_price": prev_low_price,
-            }
-        )
+        summary = {
+            "cycle_number": int(template["cycle_number"]),
+            "cycle_name": str(template["cycle_name"]),
+            "peak_date": template["peak_date"],
+            "peak_price": base_close,
+            "peak_pct_from_low": (
+                round(peak_pct_from_low, 2)
+                if peak_pct_from_low is not None
+                else None
+            ),
+            "low_date": ms_to_date(low_ts) if low_ts else None,
+            "low_price": low_price,
+            "low_pct_from_peak": (
+                round(low_pct_from_peak, 2)
+                if low_pct_from_peak is not None
+                else None
+            ),
+            "prev_peak_date": (
+                prev_summary["peak_date"] if prev_summary else None
+            ),
+            "prev_peak_price": (
+                prev_summary["peak_price"] if prev_summary else None
+            ),
+            "prev_low_date": (
+                prev_summary["low_date"] if prev_summary else None
+            ),
+            "prev_low_price": (
+                prev_summary["low_price"] if prev_summary else None
+            ),
+        }
+        summaries.append(summary)
+        prev_summary = summary
 
     return summaries
-
-
-# ══════════════════════════════════════════════════════
-# DB 저장 (Supabase)
-# ══════════════════════════════════════════════════════
 
 
 def delete_by_coin_supabase(table: str, coin_id: str):
@@ -392,18 +405,6 @@ def delete_by_coin_supabase(table: str, coin_id: str):
     res = requests.delete(
         f"{SUPABASE_URL}/rest/v1/{table}",
         params={"coin_id": f"eq.{coin_id}"},
-        headers=headers,
-        timeout=60,
-    )
-    res.raise_for_status()
-
-
-def delete_by_coin_cycle_supabase(table: str, coin_id: str, cycle_number: int):
-    """코인 + cycle_number 기준으로 삭제 (증분 업데이트용)"""
-    headers = {**get_supabase_headers(), "Prefer": "return=minimal"}
-    res = requests.delete(
-        f"{SUPABASE_URL}/rest/v1/{table}",
-        params={"coin_id": f"eq.{coin_id}", "cycle_number": f"eq.{cycle_number}"},
         headers=headers,
         timeout=60,
     )
@@ -425,23 +426,6 @@ def post_rows_supabase(table: str, rows: list[dict]):
             timeout=60,
         )
         res.raise_for_status()
-
-
-def upsert_rows_supabase(table: str, rows: list[dict]):
-    """UNIQUE 키 기준 upsert (증분 업데이트용)"""
-    headers = {
-        **get_supabase_headers(),
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal,resolution=merge-duplicates",
-    }
-    res = requests.post(
-        f"{SUPABASE_URL}/rest/v1/{table}",
-        params={"on_conflict": "coin_id,cycle_number"},
-        headers=headers,
-        json=rows,
-        timeout=60,
-    )
-    res.raise_for_status()
 
 
 def save_cycle_data_supabase(coin_id: str, records: list[dict]) -> int:
@@ -500,162 +484,6 @@ def save_summary_supabase(coin_id: str, summaries: list[dict]) -> int:
 
     post_rows_supabase("alt_cycle_summary", payload)
     return len(payload)
-
-
-def save_current_cycle_data(coin_id: str, cycle_number: int, records: list[dict]):
-    """current cycle 데이터만 교체 (증분 업데이트용)"""
-    delete_by_coin_cycle_supabase("alt_cycle_data", coin_id, cycle_number)
-    if not records:
-        return
-
-    payload = [
-        {
-            "coin_id": coin_id,
-            "cycle_number": r["cycle_number"],
-            "cycle_name": r["cycle_name"],
-            "days_since_peak": r["days_since_peak"],
-            "timestamp": slash_to_timestamptz(r["timestamp"]),
-            "close_price": r["close_price"],
-            "low_price": r["low_price"],
-            "high_price": r["high_price"],
-            "close_rate": r["close_rate"],
-            "low_rate": r["low_rate"],
-            "high_rate": r["high_rate"],
-            "peak_date": slash_to_iso(r["peak_date"]),
-            "peak_price": r["peak_price"],
-        }
-        for r in records
-    ]
-    post_rows_supabase("alt_cycle_data", payload)
-
-
-def save_current_cycle_summary(coin_id: str, summary: dict):
-    """current cycle summary 교체 (증분 업데이트용)"""
-    delete_by_coin_cycle_supabase("alt_cycle_summary", coin_id, summary["cycle_number"])
-    payload = [
-        {
-            "coin_id": coin_id,
-            "cycle_number": summary["cycle_number"],
-            "cycle_name": summary["cycle_name"],
-            "peak_date": slash_to_iso(summary["peak_date"]),
-            "peak_price": summary["peak_price"],
-            "peak_pct_from_low": summary["peak_pct_from_low"],
-            "low_date": None,
-            "low_price": None,
-            "low_pct_from_peak": None,
-            "prev_peak_date": summary["prev_peak_date"],
-            "prev_peak_price": summary["prev_peak_price"],
-            "prev_low_date": summary["prev_low_date"],
-            "prev_low_price": summary["prev_low_price"],
-        }
-    ]
-    post_rows_supabase("alt_cycle_summary", payload)
-
-
-# ══════════════════════════════════════════════════════
-# 증분 업데이트 (Supabase 조회)
-# ══════════════════════════════════════════════════════
-
-
-def fetch_current_cycle_summary(coin_id: str) -> dict | None:
-    """
-    alt_cycle_summary에서 current cycle row (low_date IS NULL) 조회.
-    없으면 None 반환 → full run 필요.
-    """
-    rows = fetch_all_supabase(
-        "alt_cycle_summary",
-        "cycle_number,peak_date,peak_price,peak_pct_from_low,prev_peak_date,prev_peak_price,prev_low_date,prev_low_price",
-        {
-            "coin_id": f"eq.{coin_id}",
-            "low_date": "is.null",
-            "order": "cycle_number.desc",
-            "limit": "1",
-        },
-    )
-    return rows[0] if rows else None
-
-
-# ══════════════════════════════════════════════════════
-# 증분 업데이트 처리
-# ══════════════════════════════════════════════════════
-
-
-def process_incremental(coin_id: str) -> bool:
-    """
-    alt_cycle_summary의 current cycle row(low_date IS NULL)를 기준으로
-    current cycle만 재계산하는 증분 업데이트.
-    Returns:
-      True  → 증분 업데이트 완료
-      False → full run 필요 (첫 실행 / 기준 데이터 없음)
-    """
-    current = fetch_current_cycle_summary(coin_id)
-    if current is None:
-        return False  # 첫 실행, full run 필요
-
-    # 직전 확정 Peak가 없으면 (첫 사이클이 current인 경우) full run
-    if not current["prev_peak_date"]:
-        return False
-
-    cycle_number = current["cycle_number"]
-    prev_peak_ts = date_to_ms(current["prev_peak_date"])
-    current_search_ts = prev_peak_ts + NEXT_SEARCH_MS
-
-    # 직전 확정 Peak 이후 2년 시점부터만 ohlcv 로드
-    from_date = ms_to_iso(current_search_ts)
-    df = load_ohlcv_supabase(coin_id, from_date=from_date)
-    if df.empty:
-        return False
-
-    # current peak 탐지 (구간 내 최고가)
-    today_ts = int(datetime.now(timezone.utc).timestamp() * 1000)
-    search_df = df[df["timestamp"] <= today_ts]
-    if search_df.empty:
-        return False
-
-    current_peak_idx = search_df["high"].idxmax()  # type: ignore[union-attr]
-    current_peak_ts = int(df.loc[current_peak_idx, "timestamp"])
-    current_peak_high = float(df.loc[current_peak_idx, "high"])
-
-    print(
-        f"    [Current Peak]  {ms_to_date(current_peak_ts)}"
-        f"  @ {current_peak_high:>14,.4f}"
-    )
-
-    # current cycle 데이터 계산 (peak부터)
-    records = calculate_cycle(df, current_peak_ts, current_peak_high, cycle_number, None, True)
-
-    # summary 재계산 (prev 정보는 DB에서 재사용)
-    prev_low_price = current["prev_low_price"]
-    if prev_low_price and prev_low_price > 0:
-        peak_pct_from_low = round(
-            ((current_peak_high - prev_low_price) / prev_low_price) * 100, 2
-        )
-    else:
-        peak_pct_from_low = None
-
-    summary = {
-        "cycle_number": cycle_number,
-        "cycle_name": make_cycle_name(current_peak_ts, is_current=True),
-        "peak_date": ms_to_date(current_peak_ts),
-        "peak_price": current_peak_high,
-        "peak_pct_from_low": peak_pct_from_low,
-        "prev_peak_date": current["prev_peak_date"],
-        "prev_peak_price": current["prev_peak_price"],
-        "prev_low_date": current["prev_low_date"],
-        "prev_low_price": current["prev_low_price"],
-    }
-
-    # 저장
-    save_current_cycle_data(coin_id, cycle_number, records)
-    save_current_cycle_summary(coin_id, summary)
-
-    print(f"  → [증분] {len(records)}행 업데이트 ✓")
-    return True
-
-
-# ══════════════════════════════════════════════════════
-# 로그 출력 (Peak/Low 상세)
-# ══════════════════════════════════════════════════════
 
 
 def date_diff_days(date_from: str, date_to: str) -> int:
@@ -733,99 +561,98 @@ def print_summary_supabase():
 
 def main():
     print("=" * 60)
-    print("알트코인 사이클 분석 시작 (USDT 페어)")
+    print("BTC-template cycle analysis start (USDT pairs)")
     print("  DB MODE    : supabase")
-    print(f"  Peak 조건 ①: 이후 1년 동안 고점 갱신 없음")
-    print(f"  Peak 조건 ②: 고점 대비 {int(PEAK_DRAWDOWN_RATE*100)}% 이상 하락")
-    print(f"  다음 탐색  : Peak 이후 3년 뒤부터")
+    print("  Cycle basis: BTC peak-date template")
+    print("  Alt base   : close on exact BTC cycle start date")
+    print("  Incremental: disabled, full recalculation")
     print("=" * 60)
 
     coins = get_coins_supabase()
-
     if not coins:
-        print(
-            "[ERROR] coins 테이블 비어있음. crypto_collector_usdt.py 먼저 실행하세요."
-        )
+        print("[ERROR] coins table is empty. Run collector first.")
         return
 
-    print(f"총 {len(coins)}개 코인 분석 시작\n")
+    btc_coin_id = find_btc_coin_id(coins)
+    if not btc_coin_id:
+        print("[ERROR] BTC coin not found in coins table.")
+        return
 
-    success, skipped, no_peak = 0, 0, 0
+    print(f"[BTC] Loading OHLCV for template source: {btc_coin_id}")
+    btc_df = load_ohlcv_supabase(btc_coin_id)
+    if btc_df.empty or len(btc_df) < 365:
+        print(f"[ERROR] BTC data is insufficient ({len(btc_df)} rows).")
+        return
+
+    print(
+        f"[BTC] Data {len(btc_df)} rows "
+        f"({btc_df['date'].iloc[0]} ~ {btc_df['date'].iloc[-1]})"
+    )
+    btc_templates = build_btc_cycle_templates(btc_df)
+    if not btc_templates:
+        print("[ERROR] BTC cycle templates could not be built.")
+        return
+
+    print("[BTC] Cycle templates:")
+    for template in btc_templates:
+        end_label = (
+            ms_to_date(template["next_peak_ts"])
+            if template.get("next_peak_ts")
+            else "latest"
+        )
+        print(
+            f"  Cy{template['cycle_number']:>2} "
+            f"{template['cycle_name']:<22} "
+            f"{template['peak_date']} ~ {end_label}"
+        )
+
+    print(f"\nTotal {len(coins)} coins to process\n")
+    success, skipped, no_cycle = 0, 0, 0
 
     for i, (coin_id, symbol) in enumerate(coins, 1):
         print(f"[{i}/{len(coins)}] {symbol} ({coin_id})")
 
-        # ── 증분 업데이트 시도 ────────────────────────────
-        if process_incremental(coin_id):
-            success += 1
-            print()
-            continue
-
-        # ── Full run (첫 실행 / current peak 확정) ────────
         df = load_ohlcv_supabase(coin_id)
-        if df.empty or len(df) < 365:
-            print(f"  → 데이터 부족 ({len(df)}일), 건너뜀\n")
+        if df.empty:
+            print("  - no OHLCV rows, skipped\n")
             skipped += 1
             continue
 
-        print(f"  데이터: {len(df)}일 ({df['date'].iloc[0]} ~ {df['date'].iloc[-1]})")
-
-        # ── Peak 탐지 (디버그 로그 포함) ────────────────
-        peaks = find_all_peaks(df, symbol)
-
-        if not peaks:
-            print(f"  → Peak 없음, 건너뜀\n")
-            no_peak += 1
-            continue
-
-        # ── Current Cycle 탐지 ──────────────────────────
-        last_peak_ts, last_peak_high = peaks[-1]
-        last_cycle_num = len(peaks)
-        current_search_ts = last_peak_ts + NEXT_SEARCH_MS
-
-        today_ts = int(datetime.now(timezone.utc).timestamp() * 1000)
-        after_3yr = df[
-            (df["timestamp"] >= current_search_ts) & (df["timestamp"] <= today_ts)
-        ]
-        if not after_3yr.empty:
-            current_cycle_num = last_cycle_num + 1
-
-            current_peak_idx = after_3yr["high"].idxmax()  # type: ignore[union-attr]
-            current_peak_ts = int(df.loc[current_peak_idx, "timestamp"])
-            current_peak_high = float(df.loc[current_peak_idx, "high"])
-
-            print(
-                f"    [Current Peak]  {ms_to_date(current_peak_ts)}"
-                f"  @ {current_peak_high:>14,.4f}"
-            )
-
-            peaks.append((current_peak_ts, current_peak_high))
-
-        # ── 사이클 데이터 계산 ──────────────────────────
+        print(f"  Data {len(df)} rows ({df['date'].iloc[0]} ~ {df['date'].iloc[-1]})")
         all_records = []
-        for idx, (peak_ts, peak_high) in enumerate(peaks):
-            cycle_num = idx + 1
-            next_peak_ts = peaks[idx + 1][0] if idx + 1 < len(peaks) else None
-            is_current = (next_peak_ts is None) and (idx == len(peaks) - 1)
-            records = calculate_cycle(
-                df, peak_ts, peak_high, cycle_num, next_peak_ts, is_current
-            )
+        skipped_cycles = 0
+
+        for template in btc_templates:
+            records = calculate_cycle_by_btc_template(df, template)
+            if not records:
+                skipped_cycles += 1
+                continue
             all_records.extend(records)
 
-        # ── Summary 계산 ────────────────────────────────
-        summaries = build_summary(df, peaks)
+        summaries = build_summary_by_btc_templates(df, btc_templates)
+        if not all_records or not summaries:
+            print(
+                "  - no BTC-template cycles generated "
+                f"(skipped cycles={skipped_cycles}), skipped\n"
+            )
+            no_cycle += 1
+            continue
 
-        # ── 로그 출력 ────────────────────────────────────
         print_coin_result(summaries)
-        print(f"  → {len(peaks)}개 사이클, {len(all_records)}행 저장 ✓\n")
+        print(
+            f"  -> {len(summaries)} cycles, {len(all_records)} rows saved "
+            f"(skipped cycles={skipped_cycles})\n"
+        )
 
-        # ── DB 저장 ──────────────────────────────────────
         save_cycle_data_supabase(coin_id, all_records)
         save_summary_supabase(coin_id, summaries)
         success += 1
 
     print("=" * 60)
-    print(f"완료: 성공 {success}개 / Peak없음 {no_peak}개 / 데이터부족 {skipped}개")
+    print(
+        f"Done: success {success} / no cycle {no_cycle} / "
+        f"no data {skipped}"
+    )
     print("=" * 60)
 
     print_summary_supabase()
