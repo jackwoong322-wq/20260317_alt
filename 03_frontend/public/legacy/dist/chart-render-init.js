@@ -1,6 +1,6 @@
 // Chart initialization & global error handling
-import { chartState } from './chart-logic.js?v=1773826372';
-import { scheduleRedrawBoxMarks } from './chart-render-overlays.js?v=1773826372';
+import { chartState } from './chart-logic.js';
+import { scheduleRedrawBoxMarks } from './chart-render-overlays.js';
 // lightweight-charts Value is null 에러 감지용 전역 핸들러
 window.addEventListener('error', (e) => {
     const msg = e.message ?? e.error?.message ?? '';

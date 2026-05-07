@@ -3,6 +3,7 @@ import { initChart } from './chart-render-init.js';
 import { setupTooltip } from './chart-render-tooltip.js';
 import { buildCoinList, buildCycleToggles, initDefaults } from './chart-ui.js';
 import { drawChart } from './chart-draw.js';
+import { initLoadStateFromInitial } from './chart-lazy-load.js';
 
 function initApp(): void {
   // [Why] DOMContentLoaded 시 flex 레이아웃 미계산 → createChart 내부 Value is null.
@@ -11,6 +12,7 @@ function initApp(): void {
     requestAnimationFrame(() => {
       initChart();
       setupTooltip();
+      initLoadStateFromInitial();
       initDefaults();
       buildCoinList();
       buildCycleToggles();
@@ -19,5 +21,9 @@ function initApp(): void {
   });
 }
 
-document.addEventListener('DOMContentLoaded', initApp);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
 

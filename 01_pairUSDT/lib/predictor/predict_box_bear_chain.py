@@ -68,6 +68,9 @@ def run_bear_chain(
         return [], []
 
     N = min(max_bear_chain, max(1, total_days // MIN_BEAR_DURATION))
+    if today_day is not None and today_day > box_start and today_day < bottom_day:
+        future_capacity = max(0, (bottom_day - today_day) // MIN_BEAR_DURATION)
+        N = min(N, 1 + future_capacity)
     dur_per_box = total_days // N
 
     chain_day = bear_chain_day
@@ -80,7 +83,10 @@ def run_bear_chain(
     for chain_i in range(N):
         # ── 기간 ──────────────────────────────────────────
         b_start = box_start if chain_i == 0 else chain_day + 1
-        b_end = min(b_start + dur_per_box - 1, bottom_day)
+        remaining_boxes = max(1, N - chain_i)
+        remaining_days = max(1, bottom_day - b_start + 1)
+        step_days = max(1, remaining_days // remaining_boxes)
+        b_end = min(b_start + step_days - 1, bottom_day)
         if chain_i == N - 1:
             b_end = bottom_day
         if chain_i == 0 and today_day is not None and b_end < today_day:
@@ -114,7 +120,8 @@ def run_bear_chain(
             b_lo - 100.0,
         )
         pred_rows.append(row)
-        path_specs.append((b_start, b_end, b_hi, b_lo, b_hi_day, b_lo_day, chain_day, chain_val, chain_i))
+        path_chain_day = chain_day
+        path_specs.append((b_start, b_end, b_hi, b_lo, b_hi_day, b_lo_day, path_chain_day, chain_val, chain_i))
 
         chain_day = b_end
         chain_val = b_lo

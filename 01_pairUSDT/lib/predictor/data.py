@@ -13,6 +13,17 @@ from lib.common.config import (
 from lib.common.utils import _log1p, _signed_log1p
 
 
+def is_current_cycle_name(value) -> bool:
+    return "Current" in str(value or "")
+
+
+def previous_available_cycle_number(cycle_numbers, cycle_num: int) -> int | None:
+    prev_numbers = sorted(int(cn) for cn in cycle_numbers if int(cn) < int(cycle_num))
+    if not prev_numbers:
+        return None
+    return prev_numbers[-1]
+
+
 def load_box_df(conn: Any) -> pd.DataFrame:
     """coin_analysis_results 실측 데이터 전체 로드."""
     df = pd.read_sql_query(
@@ -113,7 +124,7 @@ def build_training_pairs(df: pd.DataFrame) -> pd.DataFrame:
         for i in range(len(grp) - 1):
             curr = grp.iloc[i]
             nxt = grp.iloc[i + 1]
-            if curr["is_completed"] != 1:
+            if curr["is_completed"] != 1 or nxt["is_completed"] != 1:
                 continue
 
             cstat = cycle_stats[(coin_id, cycle_num)]
@@ -148,10 +159,12 @@ def build_training_pairs(df: pd.DataFrame) -> pd.DataFrame:
             btc_prev_peak_ratio = 0.0
             if (
                 str(curr["symbol"]).upper() == "BTC"
-                and cycle_num > 1
-                and (cycle_num - 1) in btc_cycle_max_hi
+                and (prev_cycle_num := previous_available_cycle_number(
+                    btc_cycle_max_hi.keys(), cycle_num
+                ))
+                is not None
             ):
-                prev_hi = btc_cycle_max_hi[cycle_num - 1]
+                prev_hi = btc_cycle_max_hi[prev_cycle_num]
                 if prev_hi and prev_hi > 0:
                     btc_prev_peak_ratio = float(curr["hi"]) / prev_hi
             log_cycle_number = float(np.log(cycle_num + 1))
@@ -209,10 +222,8 @@ def build_bottom_dataset(df: pd.DataFrame) -> pd.DataFrame:
     cycle_stats, coin_stats, phase_box_stats, btc_cycle_max_hi = (
         build_cycle_and_coin_stats(df)
     )
-    last_cycle = df.groupby("coin_id")["cycle_number"].max()
-
     for (coin_id, cycle_num), grp in df.groupby(["coin_id", "cycle_number"]):
-        if cycle_num == last_cycle[coin_id]:
+        if grp["cycle_name"].astype(str).map(is_current_cycle_name).any():
             continue
 
         grp = grp.sort_values("box_index")
@@ -256,10 +267,12 @@ def build_bottom_dataset(df: pd.DataFrame) -> pd.DataFrame:
         btc_prev_peak_ratio = 0.0
         if (
             str(ref["symbol"]).upper() == "BTC"
-            and cycle_num > 1
-            and (cycle_num - 1) in btc_cycle_max_hi
+            and (prev_cycle_num := previous_available_cycle_number(
+                btc_cycle_max_hi.keys(), cycle_num
+            ))
+            is not None
         ):
-            prev_hi = btc_cycle_max_hi[cycle_num - 1]
+            prev_hi = btc_cycle_max_hi[prev_cycle_num]
             if prev_hi and prev_hi > 0 and ref.get("hi"):
                 btc_prev_peak_ratio = float(ref["hi"]) / prev_hi
         log_cycle_number = float(np.log(cycle_num + 1))
@@ -309,10 +322,8 @@ def build_peak_dataset(df: pd.DataFrame) -> pd.DataFrame:
     cycle_stats, coin_stats, phase_box_stats, btc_cycle_max_hi = (
         build_cycle_and_coin_stats(df)
     )
-    last_cycle = df.groupby("coin_id")["cycle_number"].max()
-
     for (coin_id, cycle_num), grp in df.groupby(["coin_id", "cycle_number"]):
-        if cycle_num == last_cycle[coin_id]:
+        if grp["cycle_name"].astype(str).map(is_current_cycle_name).any():
             continue
 
         grp = grp.sort_values("box_index")
@@ -355,10 +366,12 @@ def build_peak_dataset(df: pd.DataFrame) -> pd.DataFrame:
         btc_prev_peak_ratio = 0.0
         if (
             str(ref["symbol"]).upper() == "BTC"
-            and cycle_num > 1
-            and (cycle_num - 1) in btc_cycle_max_hi
+            and (prev_cycle_num := previous_available_cycle_number(
+                btc_cycle_max_hi.keys(), cycle_num
+            ))
+            is not None
         ):
-            prev_hi = btc_cycle_max_hi[cycle_num - 1]
+            prev_hi = btc_cycle_max_hi[prev_cycle_num]
             if prev_hi and prev_hi > 0 and ref.get("hi"):
                 btc_prev_peak_ratio = float(ref["hi"]) / prev_hi
         log_cycle_number = float(np.log(cycle_num + 1))

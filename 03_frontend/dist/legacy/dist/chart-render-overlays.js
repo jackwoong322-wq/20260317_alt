@@ -1,6 +1,6 @@
 // Overlay elements: box marks, bear/bull labels, cycle low & prediction markers
-import { chartState } from './chart-logic.js?v=1773826372';
-import { getBtcAnchorInfo, getPhaseBoxStatsForSymbol, dayToTime, timeToDay, getScenarioKey, SCENARIO_STYLE } from './chart-logic.js?v=1773826372';
+import { chartState } from './chart-logic.js';
+import { getBtcAnchorInfo, getPhaseBoxStatsForSymbol, dayToTime, timeToDay, getScenarioKey, SCENARIO_STYLE } from './chart-logic.js';
 /** [Why] 확대 시 timeToCoordinate가 화면 밖 시간에 null 반환 → 가장자리로 클램프해 주석 유지 */
 function clampCoordToVisible(timeScale, day, overlayWidth) {
     if (overlayWidth <= 0)
@@ -80,19 +80,14 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
     const btcAnchor = getBtcAnchorInfo(cycleNumber);
     const phaseBoxStats = getPhaseBoxStatsForSymbol(coinSymbol, 'BULL'); // BULL/Bear 모두 참고
     const isBtcChart = (coinSymbol || '').toUpperCase() === 'BTC';
-    const peakPrice = cycleRef?.peak_price ?? null;
-    function toDollar(pct) {
-        if (!peakPrice) return null;
-        const val = Math.round(peakPrice * pct / 100);
-        return val >= 1000 ? `$${(val / 1000).toFixed(1)}k` : `$${val}`;
-    }
     if (chartState.showBoxZone && zones.length > 0) {
         zones.forEach((z, zi) => {
             const isBear = z.phase === 'BEAR';
             const isPrediction = z.is_prediction === 1; // 예측 박스 플래그
-            const isActive = !isPrediction &&
-                (z.result === 'BEAR_ACTIVE' || z.result === 'BULL_ACTIVE');
-            const isActiveBear = z.result === 'BEAR_ACTIVE';
+            const result = String(z.result || '').toUpperCase();
+            const isActive = (result === 'BEAR_ACTIVE' || result === 'BULL_ACTIVE' ||
+                result === 'PRED_BEAR_ACTIVE' || result === 'PRED_BULL_ACTIVE');
+            const isActiveBear = result === 'BEAR_ACTIVE' || result === 'PRED_BEAR_ACTIVE';
             const prevBox = zones[zi - 1] || null;
             const refHighForLow = isBear ? (prevBox ? prevBox.hi : 100) : z.hi;
             const refLowForHigh = isBear
@@ -215,25 +210,15 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                 !Number.isFinite(loVal)) {
                 return;
             }
-            // priceToCoordinate: 현재 series가 null 반환 시 다른 series로 fallback
-            function coordY(val) {
-                const y = series.priceToCoordinate(val);
-                if (y !== null) return y;
-                for (const s of Object.values(chartState.seriesMap)) {
-                    if (s === series) continue;
-                    const fy = s.priceToCoordinate(val);
-                    if (fy !== null) return fy;
-                }
-                return null;
+            let rawYHi = series.priceToCoordinate(hiVal);
+            let rawYLo = series.priceToCoordinate(loVal);
+            if (rawYHi === null || rawYLo === null) {
+                const fallbackY = chartHeight / 2;
+                if (rawYHi === null)
+                    rawYHi = rawYLo ?? fallbackY - 20;
+                if (rawYLo === null)
+                    rawYLo = rawYHi ?? fallbackY + 20;
             }
-            const rawYHiOrig = coordY(hiVal);
-            const rawYLoOrig = coordY(loVal);
-            // 둘 다 Y 범위 밖이면 건너뜀
-            if (rawYHiOrig === null && rawYLoOrig === null) {
-                return;
-            }
-            let rawYHi = rawYHiOrig ?? rawYLoOrig;
-            let rawYLo = rawYLoOrig ?? rawYHiOrig;
             if (xHi === null || xLo === null || rawYHi === null || rawYLo === null) {
                 return;
             }
@@ -245,13 +230,32 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             const sKey = isPrediction ? getScenarioKey(z.result) : null;
             const sStyle = sKey ? SCENARIO_STYLE[sKey] : null;
             const effectiveBear = isActive ? isActiveBear : isBear;
-            const hiDotColor = effectiveBear ? '#ff4466' : '#FFB800';
-            const hiDotBg = effectiveBear ? 'rgba(255,68,102,0.35)' : 'rgba(255,184,0,0.35)';
-            const loDotColor = '#00ff88';
-            const loDotBg = 'rgba(0,255,136,0.25)';
-            const hiLblColor = effectiveBear ? '#ff6688' : '#FFD700';
-            const loLblColor = '#00ff88';
-            const predOpacity = isPrediction ? '0.55' : '1';
+            const hiDotColor = isPrediction
+                ? effectiveBear
+                    ? '#FF6B6B'
+                    : '#FFD966'
+                : effectiveBear
+                    ? '#ff4466'
+                    : '#FFB800';
+            const hiDotBg = isPrediction
+                ? effectiveBear
+                    ? 'rgba(255,107,107,0.30)'
+                    : 'rgba(255,217,102,0.30)'
+                : effectiveBear
+                    ? 'rgba(255,68,102,0.35)'
+                    : 'rgba(255,184,0,0.35)';
+            const loDotColor = isPrediction ? '#66FFBB' : '#00ff88';
+            const loDotBg = isPrediction
+                ? 'rgba(102,255,187,0.25)'
+                : 'rgba(0,255,136,0.25)';
+            const hiLblColor = isPrediction
+                ? effectiveBear
+                    ? '#FF6B6B'
+                    : '#FFD966'
+                : effectiveBear
+                    ? '#ff6688'
+                    : '#FFD700';
+            const loLblColor = isPrediction ? '#66FFBB' : '#00ff88';
             const scenTag = sStyle ? ' ' + sStyle.tag : '';
             const useDashed = isPrediction || isActive;
             // high dot
@@ -260,27 +264,23 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             dotHi.innerHTML = `<div class="bz-dot" style="background:${hiDotBg};border-color:${hiDotColor};width:9px;height:9px;${useDashed ? 'border-style:dashed;' : ''}"></div>`;
             dotHi.style.left = xHi + 'px';
             dotHi.style.top = (rawYHi ?? 0) + 'px';
-            dotHi.style.opacity = predOpacity;
             overlay.appendChild(dotHi);
             chartState.boxMarkEls.push(dotHi);
             const lblHi = document.createElement('div');
             lblHi.className = 'bz-label' + (isPrediction ? ' prediction' : '');
             lblHi.style.color = hiLblColor;
-            lblHi.style.opacity = predOpacity;
             let hiText;
-            const riseDaysTag = z.rise_days != null ? `(${z.rise_days}d)` : '';
             if (isPrediction) {
                 const chg = hiVsPrevLo !== null
                     ? ` ${parseFloat(hiVsPrevLo) >= 0 ? '+' : ''}${parseFloat(hiVsPrevLo).toFixed(1)}%`
                     : '';
-                const hiDollar = toDollar(z.hi);
-                hiText = `EH${z.boxIndex != null ? z.boxIndex + 1 : zi + 1} ${z.hi.toFixed(1)}%${hiDollar ? `(${hiDollar})` : ''}${chg}${riseDaysTag}${scenTag}`;
+                hiText = `H${z.boxIndex != null ? z.boxIndex + 1 : zi + 1} ${z.hi.toFixed(1)}%${chg}${scenTag}`;
             }
             else {
                 const chg = hiVsPrevLo !== null
                     ? ` ${parseFloat(hiVsPrevLo) >= 0 ? '+' : ''}${parseFloat(hiVsPrevLo).toFixed(1)}%`
                     : '';
-                hiText = `H${zi + 1} ${z.hi.toFixed(1)}%${chg}${riseDaysTag}`;
+                hiText = `H${zi + 1} ${z.hi.toFixed(1)}%${chg}`;
             }
             lblHi.textContent = hiText;
             const startPxHi = timeScale.timeToCoordinate(dayToTime(z.startX));
@@ -299,14 +299,11 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                 xLabelHi = xHi;
             }
             const pad = 40;
-            const hiOffScreen = (endPxHi !== null && endPxHi < 0) || (startPxHi !== null && startPxHi > overlayWidth);
-            if (!hiOffScreen) {
-                xLabelHi = Math.max(pad, Math.min(overlayWidth - pad, xLabelHi));
-            }
+            xLabelHi = Math.max(pad, Math.min(overlayWidth - pad, xLabelHi));
             lblHi.style.left = xLabelHi + 'px';
             lblHi.style.transform = 'translateX(-50%)';
             const rawTopHi = rawYHi - 18;
-            const visibleHi = !hiOffScreen && rawTopHi >= 0 && rawTopHi <= chartHeight;
+            const visibleHi = rawTopHi >= 0 && rawTopHi <= chartHeight;
             lblHi.style.display = visibleHi ? 'block' : 'none';
             if (visibleHi) {
                 lblHi.style.top = rawTopHi + 'px';
@@ -325,28 +322,24 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             dotLo.innerHTML = `<div class="bz-dot" style="background:${loDotBg};border-color:${loDotColor};width:9px;height:9px;${useDashed ? 'border-style:dashed;' : ''}"></div>`;
             dotLo.style.left = xLo + 'px';
             dotLo.style.top = (rawYLo ?? 0) + 'px';
-            dotLo.style.opacity = predOpacity;
             overlay.appendChild(dotLo);
             chartState.boxMarkEls.push(dotLo);
             // low label
             const lblLo = document.createElement('div');
             lblLo.className = 'bz-label' + (isPrediction ? ' prediction' : '');
             lblLo.style.color = loLblColor;
-            lblLo.style.opacity = predOpacity;
             let loText;
-            const declineDaysTag = z.decline_days != null ? `(${z.decline_days}d)` : '';
             if (isPrediction) {
                 const chg = loVsPrevHi !== null
                     ? ` ${parseFloat(loVsPrevHi) >= 0 ? '+' : ''}${parseFloat(loVsPrevHi).toFixed(1)}%`
                     : '';
-                const loDollar = toDollar(z.lo);
-                loText = `EL${z.boxIndex != null ? z.boxIndex + 1 : zi + 1} ${z.lo.toFixed(1)}%${loDollar ? `(${loDollar})` : ''}${chg}${declineDaysTag}`;
+                loText = `L${z.boxIndex != null ? z.boxIndex + 1 : zi + 1} ${z.lo.toFixed(1)}%${chg}`;
             }
             else {
                 const chg = loVsPrevHi !== null
                     ? ` ${parseFloat(loVsPrevHi) >= 0 ? '+' : ''}${parseFloat(loVsPrevHi).toFixed(1)}%`
                     : '';
-                loText = `L${zi + 1} ${z.lo.toFixed(1)}%${chg}${declineDaysTag}`;
+                loText = `L${zi + 1} ${z.lo.toFixed(1)}%${chg}`;
             }
             lblLo.textContent = loText;
             const startPxLo = timeScale.timeToCoordinate(dayToTime(z.startX));
@@ -364,14 +357,11 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             else {
                 xLabelLo = xLo;
             }
-            const loOffScreen = (endPxLo !== null && endPxLo < 0) || (startPxLo !== null && startPxLo > overlayWidth);
-            if (!loOffScreen) {
-                xLabelLo = Math.max(pad, Math.min(overlayWidth - pad, xLabelLo));
-            }
+            xLabelLo = Math.max(pad, Math.min(overlayWidth - pad, xLabelLo));
             lblLo.style.left = xLabelLo + 'px';
             lblLo.style.transform = 'translateX(-50%)';
             const rawTopLo = rawYLo + 6;
-            const visibleLo = !loOffScreen && rawTopLo >= 0 && rawTopLo <= chartHeight;
+            const visibleLo = rawTopLo >= 0 && rawTopLo <= chartHeight;
             lblLo.style.display = visibleLo ? 'block' : 'none';
             if (visibleLo) {
                 lblLo.style.top = rawTopLo + 'px';
@@ -394,7 +384,33 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                     const loChg = loVsPrevHi !== null
                         ? `<span class="${parseFloat(loVsPrevHi) >= 0 ? 'bt-up' : 'bt-down'}">${parseFloat(loVsPrevHi) >= 0 ? '+' : ''}${loVsPrevHi}%</span>`
                         : '<span style="color:#666">-</span>';
-                    const reasonLine = '';
+                    let reasonLine = '';
+                    if (isPrediction) {
+                        let btcText = '';
+                        if (btcAnchor) {
+                            const pct = (btcAnchor.progress * 100).toFixed(0);
+                            const riskLabel = btcAnchor.level === 'HIGH'
+                                ? 'High Risk'
+                                : btcAnchor.level === 'MID'
+                                    ? 'Caution'
+                                    : 'Normal';
+                            btcText = `BTC Cycle Pos: ${pct}% (${riskLabel})`;
+                        }
+                        let boxText = '';
+                        if (phaseBoxStats) {
+                            const avgBoxes = phaseBoxStats.avg.toFixed(1);
+                            const curBoxNo = zi + 1;
+                            boxText = `Avg Box Count: ${avgBoxes} / now #${curBoxNo}`;
+                        }
+                        if (isBtcChart) {
+                            boxText =
+                                (boxText ? boxText + ' · ' : '') +
+                                    'Based on BTC Historical Data Only';
+                        }
+                        if (btcText || boxText) {
+                            reasonLine = `<div class="bt-row"><span class="bt-key" style="font-size:9px;opacity:0.7">Reason</span><span class="bt-val" style="font-size:9px;text-align:right;">${btcText}${btcText && boxText ? ' · ' : ''}${boxText}</span></div>`;
+                        }
+                    }
                     const highRiskCaution = isPrediction && btcAnchor && btcAnchor.level === 'HIGH';
                     let targetLine = '';
                     if (isPrediction) {
@@ -433,8 +449,7 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                             '</div>' +
                             '<div class="bt-row"><span class="bt-key">고점</span><span class="bt-val">' +
                             z.hi.toFixed(2) +
-                            '%' + (toDollar(z.hi) ? `(${toDollar(z.hi)})` : '') +
-                            '</span>' +
+                            '%</span>' +
                             hiChg +
                             '</div>' +
                             '<div class="bt-row"><span class="bt-key" style="font-size:9px;opacity:0.6">&nbsp;' +
@@ -442,8 +457,7 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                             '</span></div>' +
                             '<div class="bt-row"><span class="bt-key">저점</span><span class="bt-val">' +
                             z.lo.toFixed(2) +
-                            '%' + (toDollar(z.lo) ? `(${toDollar(z.lo)})` : '') +
-                            '</span>' +
+                            '%</span>' +
                             loChg +
                             '</div>' +
                             '<div class="bt-row"><span class="bt-key" style="font-size:9px;opacity:0.6">&nbsp;' +

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Altcoin Cycle Analyzer</title>
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
-<link rel="stylesheet" href="/legacy/chart-v2.css">
+<link rel="stylesheet" href="/legacy/chart-v2.css" onerror="this.onerror=null;this.href='chart-v2.css'">
 </head>
 <body>
 <div class="header">
@@ -46,7 +46,84 @@
   </main>
 </div>
 
-<script>const ALL_DATA = __CHART_DATA__;</script>
-<script type="module" src="/legacy/dist/chart.js"></script>
+<script>
+var ALL_DATA = {};
+window.__LEGACY_CHART_DATA__ = "__LEGACY_CHART_DATA__";
+window.__DASHBOARD_META__ = "__DASHBOARD_META__";
+window.__DASHBOARD_MANIFEST__ = "__DASHBOARD_MANIFEST__";
+window.__API_BASE_URL__ = "__API_BASE_URL__";
+
+function isInjectedObject(value) {
+  return value && typeof value === 'object';
+}
+
+function resolveDevApiBaseUrl() {
+  if (
+    typeof window.__API_BASE_URL__ === 'string' &&
+    window.__API_BASE_URL__ &&
+    window.__API_BASE_URL__ !== '__API_BASE_URL__'
+  ) {
+    return window.__API_BASE_URL__;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const requestedApiBaseUrl = params.get('apiBaseUrl');
+  if (requestedApiBaseUrl) {
+    try {
+      const requested = new URL(requestedApiBaseUrl);
+      const allowedHosts = new Set([
+        'localhost',
+        '127.0.0.1',
+        'two0260317-alt.onrender.com',
+      ]);
+      if (allowedHosts.has(requested.hostname)) {
+        return requested.origin;
+      }
+    } catch {
+      /* ignore invalid dev fallback URL */
+    }
+  }
+
+  return 'http://127.0.0.1:8000';
+}
+
+async function fetchDashboardJson(apiBaseUrl, path) {
+  const response = await fetch(`${apiBaseUrl}${path}`);
+  if (!response.ok) {
+    throw new Error(`${path}: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+window.__loadLegacyChartData = async function () {
+  if (isInjectedObject(window.__LEGACY_CHART_DATA__)) {
+    ALL_DATA = window.__LEGACY_CHART_DATA__;
+    return;
+  }
+
+  const apiBaseUrl = resolveDevApiBaseUrl();
+  const [manifestResponse, initialResponse] = await Promise.all([
+    fetchDashboardJson(apiBaseUrl, '/api/dashboard-manifest'),
+    fetchDashboardJson(apiBaseUrl, '/api/dashboard-initial-data'),
+  ]);
+  window.__API_BASE_URL__ = apiBaseUrl;
+  window.__DASHBOARD_MANIFEST__ = manifestResponse;
+  window.__DASHBOARD_META__ = {
+    data_version: initialResponse.data_version,
+    generated_at: initialResponse.generated_at,
+    cache_status: initialResponse.cache_status,
+  };
+  window.__LEGACY_CHART_DATA__ = initialResponse.data;
+  ALL_DATA = initialResponse.data;
+};
+</script>
+<script type="module">
+await window.__loadLegacyChartData();
+await import(
+  location.protocol === 'file:'
+    ? './dist/chart.js?v=1778110154'
+    : '/legacy/dist/chart.js?v=1778110154'
+);
+</script>
 </body>
 </html>

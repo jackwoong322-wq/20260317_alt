@@ -16,18 +16,53 @@ from lib.common.config import (
 )
 
 
+def _expected_model_features(model, fallback_cols: list[str]) -> list[str]:
+    """Return the feature order recorded by the model when available."""
+    feature_names = getattr(model, "feature_names_in_", None)
+    if feature_names is not None:
+        return [str(name) for name in feature_names]
+
+    get_booster = getattr(model, "get_booster", None)
+    if callable(get_booster):
+        booster = get_booster()
+        feature_names = getattr(booster, "feature_names", None)
+        if feature_names:
+            return [str(name) for name in feature_names]
+
+    return list(fallback_cols)
+
+
+def _select_model_features(
+    X_pred: pd.DataFrame, model, fallback_cols: list[str]
+) -> pd.DataFrame:
+    cols = _expected_model_features(model, fallback_cols)
+    missing = [col for col in cols if col not in X_pred.columns]
+    if missing:
+        raise ValueError(
+            "Prediction feature vector is missing required model columns: "
+            + ", ".join(missing)
+        )
+    return X_pred[cols]
+
+
 def get_model_predictions(
     group_models: dict, X_pred: pd.DataFrame, last: pd.Series, reg_key: str = ""
 ):
     """Get hi/lo/dur and phase probabilities from group models."""
     if reg_key in ("BTC_BEAR", "BTC_BULL"):
-        X_reg = X_pred[FEATURE_COLS_BTC_REG]
+        fallback_reg_cols = FEATURE_COLS_BTC_REG
     else:
-        X_reg = X_pred[FEATURE_COLS_BEAR] if reg_key.endswith("_BEAR") else X_pred[FEATURE_COLS]
-    pred_norm_hi = float(group_models[TARGET_HI].predict(X_reg)[0])
-    pred_norm_lo = float(group_models[TARGET_LO].predict(X_reg)[0])
-    pred_norm_dur = float(group_models[TARGET_DUR].predict(X_reg)[0])
-    phase_proba = group_models[TARGET_PHASE].predict_proba(X_pred[FEATURE_COLS])[0]
+        fallback_reg_cols = FEATURE_COLS_BEAR if reg_key.endswith("_BEAR") else FEATURE_COLS
+
+    X_hi = _select_model_features(X_pred, group_models[TARGET_HI], fallback_reg_cols)
+    X_lo = _select_model_features(X_pred, group_models[TARGET_LO], fallback_reg_cols)
+    X_dur = _select_model_features(X_pred, group_models[TARGET_DUR], fallback_reg_cols)
+    X_phase = _select_model_features(X_pred, group_models[TARGET_PHASE], FEATURE_COLS)
+
+    pred_norm_hi = float(group_models[TARGET_HI].predict(X_hi)[0])
+    pred_norm_lo = float(group_models[TARGET_LO].predict(X_lo)[0])
+    pred_norm_dur = float(group_models[TARGET_DUR].predict(X_dur)[0])
+    phase_proba = group_models[TARGET_PHASE].predict_proba(X_phase)[0]
     prob_bear, prob_bull = float(phase_proba[0]), float(phase_proba[1])
 
     last_hi = float(last["hi"]) if last["hi"] else 100.0

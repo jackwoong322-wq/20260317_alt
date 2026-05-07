@@ -1,7 +1,7 @@
 // ── Prediction path series (bull / bear dotted lines) ──────────────────────
-import { chartState } from './chart-logic.js?v=1773826372';
-import { dayToTime, buildStepSeries, sanitizePathPoints } from './chart-logic.js?v=1773826372';
-import { setSeriesDataSafe, filterValidPoints } from './chart-series-helpers.js?v=1773826372';
+import { chartState } from './chart-logic.js';
+import { dayToTime, buildStepSeries, sanitizePathPoints } from './chart-logic.js';
+import { setSeriesDataSafe, filterValidPoints } from './chart-series-helpers.js';
 function buildPathLinePoints(rawPts) {
     return rawPts
         .map((p) => {

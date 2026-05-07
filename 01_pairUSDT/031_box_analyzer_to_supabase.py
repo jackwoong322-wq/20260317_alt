@@ -175,6 +175,17 @@ def build_zone_rows(
     return rows
 
 
+def is_current_cycle(cycle: dict) -> bool:
+    return "Current" in str(cycle.get("cycle_name") or "")
+
+
+def find_next_available_cycle(cycles: dict, cycle_number: int) -> dict | None:
+    next_numbers = sorted(cn for cn in cycles if cn > cycle_number)
+    if not next_numbers:
+        return None
+    return cycles[next_numbers[0]]
+
+
 def apply_current_cycle_active_retag(rows: list[dict]):
     groups: dict[tuple[str, int], list[dict]] = defaultdict(list)
     for r in rows:
@@ -291,15 +302,14 @@ def main():
             if len(data) < 2:
                 continue
 
-            last_cycle_num = max(cycles.keys())
-            zones = detect_box_zones(data, is_last_cycle=(cn == last_cycle_num))
+            zones = detect_box_zones(data, is_last_cycle=is_current_cycle(cycle))
             if not zones:
                 continue
 
             zones = finalize_hi_lo_days(zones, data)
 
-            if cn < last_cycle_num:
-                next_cycle = cycles.get(cn + 1)
+            if not is_current_cycle(cycle):
+                next_cycle = find_next_available_cycle(cycles, cn)
                 if next_cycle:
                     this_peak = cycle.get("peak_price")
                     next_peak = next_cycle.get("peak_price")

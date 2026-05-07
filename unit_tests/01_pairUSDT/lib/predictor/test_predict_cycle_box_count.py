@@ -27,8 +27,12 @@ class _FakeCursor:
 class _FakeConn:
     def __init__(self, rows):
         self._rows = rows
+        self.sql = None
+        self.params = None
 
-    def execute(self, *_args, **_kwargs):
+    def execute(self, sql, params=None):
+        self.sql = sql
+        self.params = params
         return _FakeCursor(self._rows)
 
 
@@ -38,11 +42,13 @@ class TestGetCounts:
         counts = get_btc_completed_cycle_box_counts(conn)
         assert [c[1] for c in counts] == [4, 3, 4, 7]
         assert [c[2] for c in counts] == [3, 5, 6, 7]
+        assert "NOT LIKE '%CURRENT%'" in conn.sql
 
     def test_coin_counts_aggregation(self):
         conn = _FakeConn(SPEC_COUNTS)
         counts = get_completed_cycle_box_counts(conn, coin_id=1)
         assert counts == SPEC_COUNTS
+        assert "NOT LIKE '%CURRENT%'" in conn.sql
 
 
 class TestLinearRegression:
@@ -114,3 +120,16 @@ class TestPredictCycleBoxCounts:
         assert result5 is not None and result6 is not None
         assert result6.bear_count >= result5.bear_count - BEAR_GUARD_DELTA
         assert result6.bull_count >= result5.bull_count
+
+    def test_non_contiguous_target_does_not_invent_missing_cycles(self, monkeypatch):
+        monkeypatch.setattr(
+            "lib.predictor.predict_cycle_box_count.get_btc_completed_cycle_box_counts",
+            lambda _conn: [(1, 4, 3), (3, 4, 6)],
+        )
+
+        result = predict_cycle_box_counts(None, 5)
+
+        assert result is not None
+        assert result.cycle_number == 5
+        assert result.bear_count == 4
+        assert result.bull_count == 9

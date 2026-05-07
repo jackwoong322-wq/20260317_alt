@@ -2,6 +2,15 @@
 import { chartState } from './chart-logic.js';
 import { CYCLE_COLORS } from './chart-logic.js';
 import { drawChart } from './chart-draw.js';
+import {
+  ensureCycleLoaded,
+  findManifestCycle,
+  getDashboardManifest,
+  getCycleDisplayName,
+  getCycleStatus,
+  getManifestCoins,
+  isCycleAvailable,
+} from './chart-lazy-load.js';
 
 declare const ALL_DATA: any;
 
@@ -10,16 +19,15 @@ export function buildCoinList(filter: string = ''): void {
   const el = document.getElementById('coinList');
   if (!el) return;
   el.innerHTML = '';
-  const keys = Object.keys(ALL_DATA).filter((id) => {
-    const d = ALL_DATA[id];
+  const coins = getManifestCoins().filter((d: any) => {
     return (
-      d.symbol.toLowerCase().includes(filter.toLowerCase()) ||
-      d.name.toLowerCase().includes(filter.toLowerCase())
+      (d.symbol || '').toLowerCase().includes(filter.toLowerCase()) ||
+      (d.name || '').toLowerCase().includes(filter.toLowerCase())
     );
   });
 
-  keys.forEach((id) => {
-    const d = ALL_DATA[id];
+  coins.forEach((d: any) => {
+    const id = d.coin_id;
     const sel = chartState.selectedCoins.includes(id);
     const div = document.createElement('div');
     div.className = 'coin-item' + (sel ? ' checked active' : '');
@@ -34,12 +42,30 @@ export function buildCoinList(filter: string = ''): void {
       <span class="coin-symbol">${d.symbol}</span>
       <span class="coin-name">${d.name}</span>
     `;
-    div.onclick = () => toggleCoin(id, div);
+    div.onclick = () => {
+      void toggleCoin(id, div);
+    };
     el.appendChild(div);
   });
 }
 
-function toggleCoin(id: string, el: HTMLElement): void {
+async function loadActiveCyclesForSelection(): Promise<void> {
+  const tasks: Promise<void>[] = [];
+  chartState.selectedCoins.forEach((coinId: string) => {
+    chartState.activeCycles.forEach((cycleNumber: number) => {
+      if (isCycleAvailable(coinId, cycleNumber)) {
+        tasks.push(ensureCycleLoaded(coinId, cycleNumber));
+      }
+    });
+  });
+
+  buildCycleToggles();
+  await Promise.allSettled(tasks);
+  buildCycleToggles();
+  drawChart();
+}
+
+async function toggleCoin(id: string, el: HTMLElement): Promise<void> {
   const idx = chartState.selectedCoins.indexOf(id);
   if (idx >= 0) {
     // 최소 1개 코인은 항상 선택 상태 유지 (마지막 코인은 해제 불가)
@@ -52,7 +78,7 @@ function toggleCoin(id: string, el: HTMLElement): void {
     chartState.selectedCoins.push(id);
     el.classList.add('checked', 'active');
   }
-  drawChart();
+  await loadActiveCyclesForSelection();
 }
 
 function clearAll(): void {
@@ -69,7 +95,8 @@ export function buildCycleToggles(): void {
   el.innerHTML = '';
   const cycleNums = new Set<number>();
   chartState.selectedCoins.forEach((id: string) => {
-    (ALL_DATA[id]?.cycles || []).forEach((c: any) =>
+    const manifestCoin = getManifestCoins().find((coin: any) => coin.coin_id === id);
+    (manifestCoin?.cycles || []).forEach((c: any) =>
       cycleNums.add(Number(c.cycle_number) as number),
     );
   });
@@ -89,11 +116,9 @@ export function buildCycleToggles(): void {
     const col = (CYCLE_COLORS as any)[n] || (CYCLE_COLORS as any)[1];
     let name = `CYCLE ${n}`;
     for (const id of chartState.selectedCoins) {
-      const found = (ALL_DATA[id]?.cycles || []).find(
-        (c: any) => c.cycle_number === n,
-      );
+      const found = findManifestCycle(id, n);
       if (found) {
-        name = found.cycle_name.toUpperCase();
+        name = getCycleDisplayName(id, n).toUpperCase();
         break;
       }
     }
@@ -103,15 +128,53 @@ export function buildCycleToggles(): void {
     const btn = document.createElement('button');
     btn.className = 'cycle-btn';
     const active = chartState.activeCycles.has(n);
+    const statuses = chartState.selectedCoins.map((coinId: string) => ({
+      available: isCycleAvailable(coinId, n),
+      status: getCycleStatus(coinId, n),
+    }));
+    const hasUnavailable = statuses.some((item) => !item.available);
+    const hasLoading = statuses.some((item) => item.status === 'loading');
+    const hasError = statuses.some((item) => item.status === 'error');
+    const allEmpty =
+      statuses.length > 0 &&
+      statuses.every((item) => !item.available || item.status === 'empty');
+    const allLoaded =
+      statuses.length > 0 &&
+      statuses.every(
+        (item) =>
+          !item.available ||
+          item.status === 'loaded' ||
+          item.status === 'empty',
+      );
     (btn as HTMLButtonElement).style.cssText = active
       ? `border-color:${col.main};color:${col.main};background:${col.band}`
       : 'border-color:#1e2d45;color:#4a6080;background:transparent';
-    btn.textContent = name;
+    if (hasUnavailable) {
+      btn.style.opacity = '0.45';
+    }
+    if (hasError) {
+      btn.style.borderColor = '#ff4466';
+      btn.style.color = '#ff92aa';
+    } else if (hasLoading) {
+      btn.style.borderColor = '#FFB800';
+      btn.style.color = '#FFB800';
+    } else if (allEmpty) {
+      btn.style.borderColor = '#4a6080';
+      btn.style.color = '#6882a7';
+    } else if (allLoaded && !active) {
+      btn.style.borderColor = '#2d4a68';
+    }
+    btn.textContent = hasLoading
+      ? `${name} LOADING`
+      : hasError
+        ? `${name} ERROR`
+        : allEmpty
+          ? `${name} EMPTY`
+          : name;
     btn.onclick = () => {
       if (chartState.activeCycles.has(n)) chartState.activeCycles.delete(n);
       else chartState.activeCycles.add(n);
-      buildCycleToggles();
-      drawChart();
+      void loadActiveCyclesForSelection();
     };
     el.appendChild(btn);
   });
@@ -152,10 +215,20 @@ function toggleBearBull() {
 
 // ── Defaults & Bottom Override UI ─────────────────────
 export function initDefaults() {
+  const manifest = getDashboardManifest();
+  if (
+    typeof manifest.default_coin_id === 'string' &&
+    getManifestCoins().some((coin: any) => coin.coin_id === manifest.default_coin_id)
+  ) {
+    chartState.selectedCoins = [manifest.default_coin_id];
+  }
+  if (Number.isFinite(Number(manifest.default_cycle_number))) {
+    chartState.activeCycles = new Set([Number(manifest.default_cycle_number)]);
+  } else {
   // 기본 코인: BTC 자동 선택 (이미 selectedCoins 에 세팅되어 있음)
   // 기본 사이클: CURRENT / 최신 사이클을 포함해 존재하는 사이클 중 최대 번호를 활성화
   const allCycleNums = new Set<number>();
-  Object.values(ALL_DATA).forEach((coin: any) => {
+  getManifestCoins().forEach((coin: any) => {
     (coin.cycles || []).forEach((c: any) =>
       allCycleNums.add(Number(c.cycle_number)),
     );
@@ -163,6 +236,7 @@ export function initDefaults() {
   if (allCycleNums.size > 0) {
     const maxCycle = Math.max(...Array.from(allCycleNums.values()));
     chartState.activeCycles = new Set([maxCycle]);
+  }
   }
   // BOX ZONE 기본 활성화 버튼 스타일 동기화
   const boxBtn = document.getElementById('toggleBox') as HTMLButtonElement | null;

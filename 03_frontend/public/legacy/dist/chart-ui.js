@@ -1,19 +1,20 @@
 // UI interactions: coin list, buttons, search, toggles
-import { chartState } from './chart-logic.js?v=1773826372';
-import { CYCLE_COLORS } from './chart-logic.js?v=1773826372';
+import { chartState } from './chart-logic.js';
+import { CYCLE_COLORS } from './chart-logic.js';
+import { drawChart } from './chart-draw.js';
+import { ensureCycleLoaded, findManifestCycle, getDashboardManifest, getCycleDisplayName, getCycleStatus, getManifestCoins, isCycleAvailable, } from './chart-lazy-load.js';
 // ── Coin List UI ──────────────────────────────────────
 export function buildCoinList(filter = '') {
     const el = document.getElementById('coinList');
     if (!el)
         return;
     el.innerHTML = '';
-    const keys = Object.keys(ALL_DATA).filter((id) => {
-        const d = ALL_DATA[id];
-        return (d.symbol.toLowerCase().includes(filter.toLowerCase()) ||
-            d.name.toLowerCase().includes(filter.toLowerCase()));
+    const coins = getManifestCoins().filter((d) => {
+        return ((d.symbol || '').toLowerCase().includes(filter.toLowerCase()) ||
+            (d.name || '').toLowerCase().includes(filter.toLowerCase()));
     });
-    keys.forEach((id) => {
-        const d = ALL_DATA[id];
+    coins.forEach((d) => {
+        const id = d.coin_id;
         const sel = chartState.selectedCoins.includes(id);
         const div = document.createElement('div');
         div.className = 'coin-item' + (sel ? ' checked active' : '');
@@ -28,11 +29,27 @@ export function buildCoinList(filter = '') {
       <span class="coin-symbol">${d.symbol}</span>
       <span class="coin-name">${d.name}</span>
     `;
-        div.onclick = () => toggleCoin(id, div);
+        div.onclick = () => {
+            void toggleCoin(id, div);
+        };
         el.appendChild(div);
     });
 }
-function toggleCoin(id, el) {
+async function loadActiveCyclesForSelection() {
+    const tasks = [];
+    chartState.selectedCoins.forEach((coinId) => {
+        chartState.activeCycles.forEach((cycleNumber) => {
+            if (isCycleAvailable(coinId, cycleNumber)) {
+                tasks.push(ensureCycleLoaded(coinId, cycleNumber));
+            }
+        });
+    });
+    buildCycleToggles();
+    await Promise.allSettled(tasks);
+    buildCycleToggles();
+    drawChart();
+}
+async function toggleCoin(id, el) {
     const idx = chartState.selectedCoins.indexOf(id);
     if (idx >= 0) {
         // 최소 1개 코인은 항상 선택 상태 유지 (마지막 코인은 해제 불가)
@@ -46,7 +63,7 @@ function toggleCoin(id, el) {
         chartState.selectedCoins.push(id);
         el.classList.add('checked', 'active');
     }
-    drawChart();
+    await loadActiveCyclesForSelection();
 }
 function clearAll() {
     chartState.selectedCoins = [];
@@ -62,7 +79,8 @@ export function buildCycleToggles() {
     el.innerHTML = '';
     const cycleNums = new Set();
     chartState.selectedCoins.forEach((id) => {
-        (ALL_DATA[id]?.cycles || []).forEach((c) => cycleNums.add(Number(c.cycle_number)));
+        const manifestCoin = getManifestCoins().find((coin) => coin.coin_id === id);
+        (manifestCoin?.cycles || []).forEach((c) => cycleNums.add(Number(c.cycle_number)));
     });
     if (cycleNums.size === 0) {
         [1, 2, 3, 4, 5].forEach((n) => cycleNums.add(n));
@@ -78,9 +96,9 @@ export function buildCycleToggles() {
         const col = CYCLE_COLORS[n] || CYCLE_COLORS[1];
         let name = `CYCLE ${n}`;
         for (const id of chartState.selectedCoins) {
-            const found = (ALL_DATA[id]?.cycles || []).find((c) => c.cycle_number === n);
+            const found = findManifestCycle(id, n);
             if (found) {
-                name = found.cycle_name.toUpperCase();
+                name = getCycleDisplayName(id, n).toUpperCase();
                 break;
             }
         }
@@ -90,17 +108,53 @@ export function buildCycleToggles() {
         const btn = document.createElement('button');
         btn.className = 'cycle-btn';
         const active = chartState.activeCycles.has(n);
+        const statuses = chartState.selectedCoins.map((coinId) => ({
+            available: isCycleAvailable(coinId, n),
+            status: getCycleStatus(coinId, n),
+        }));
+        const hasUnavailable = statuses.some((item) => !item.available);
+        const hasLoading = statuses.some((item) => item.status === 'loading');
+        const hasError = statuses.some((item) => item.status === 'error');
+        const allEmpty = statuses.length > 0 &&
+            statuses.every((item) => !item.available || item.status === 'empty');
+        const allLoaded = statuses.length > 0 &&
+            statuses.every((item) => !item.available ||
+                item.status === 'loaded' ||
+                item.status === 'empty');
         btn.style.cssText = active
-            ? `border-color:${col.main};color:${col.main};background:${col.band.replace('0.08', '0.14')}`
-            : 'border-color:#334b6a;color:#4f6685;background:transparent';
-        btn.textContent = name;
+            ? `border-color:${col.main};color:${col.main};background:${col.band}`
+            : 'border-color:#1e2d45;color:#4a6080;background:transparent';
+        if (hasUnavailable) {
+            btn.style.opacity = '0.45';
+        }
+        if (hasError) {
+            btn.style.borderColor = '#ff4466';
+            btn.style.color = '#ff92aa';
+        }
+        else if (hasLoading) {
+            btn.style.borderColor = '#FFB800';
+            btn.style.color = '#FFB800';
+        }
+        else if (allEmpty) {
+            btn.style.borderColor = '#4a6080';
+            btn.style.color = '#6882a7';
+        }
+        else if (allLoaded && !active) {
+            btn.style.borderColor = '#2d4a68';
+        }
+        btn.textContent = hasLoading
+            ? `${name} LOADING`
+            : hasError
+                ? `${name} ERROR`
+                : allEmpty
+                    ? `${name} EMPTY`
+                    : name;
         btn.onclick = () => {
             if (chartState.activeCycles.has(n))
                 chartState.activeCycles.delete(n);
             else
                 chartState.activeCycles.add(n);
-            buildCycleToggles();
-            drawChart();
+            void loadActiveCyclesForSelection();
         };
         el.appendChild(btn);
     });
@@ -110,8 +164,8 @@ function toggleHighLow() {
     const btn = document.getElementById('toggleRange');
     if (btn) {
         btn.style.cssText = chartState.showHighLow
-            ? 'border-color:#00d4ff;color:#00d4ff;background:rgba(0,212,255,0.13)'
-            : 'border-color:#334b6a;color:#4f6685;background:transparent';
+            ? 'border-color:#00d4ff;color:#00d4ff;background:rgba(0,212,255,0.1)'
+            : 'border-color:#4a6080;color:#4a6080;';
     }
     drawChart();
 }
@@ -120,8 +174,8 @@ function toggleBoxZone() {
     const btn = document.getElementById('toggleBox');
     if (btn) {
         btn.style.cssText = chartState.showBoxZone
-            ? 'border-color:#ffbf49;color:#ffbf49;background:rgba(255,191,73,0.13)'
-            : 'border-color:#334b6a;color:#4f6685;background:transparent';
+            ? 'border-color:#FFB800;color:#FFB800;background:rgba(255,184,0,0.1)'
+            : 'border-color:#4a6080;color:#4a6080;';
     }
     drawChart();
 }
@@ -130,29 +184,39 @@ function toggleBearBull() {
     const btn = document.getElementById('toggleBearBull');
     if (btn) {
         btn.style.cssText = chartState.showBearBull
-            ? 'border-color:#1bf0a2;color:#9af7cf;background:rgba(27,240,162,0.1)'
-            : 'border-color:#334b6a;color:#4f6685;background:transparent';
+            ? 'border-color:#a0f0c0;color:#a0f0c0;background:rgba(0,255,136,0.08)'
+            : 'border-color:#4a6080;color:#4a6080;';
     }
     drawChart();
 }
 // ── Defaults & Bottom Override UI ─────────────────────
 export function initDefaults() {
-    // 기본 코인: BTC 자동 선택 (이미 selectedCoins 에 세팅되어 있음)
-    // 기본 사이클: CURRENT / 최신 사이클을 포함해 존재하는 사이클 중 최대 번호를 활성화
-    const allCycleNums = new Set();
-    Object.values(ALL_DATA).forEach((coin) => {
-        (coin.cycles || []).forEach((c) => allCycleNums.add(Number(c.cycle_number)));
-    });
-    if (allCycleNums.size > 0) {
-        const maxCycle = Math.max(...Array.from(allCycleNums.values()));
-        chartState.activeCycles = new Set([maxCycle]);
+    const manifest = getDashboardManifest();
+    if (typeof manifest.default_coin_id === 'string' &&
+        getManifestCoins().some((coin) => coin.coin_id === manifest.default_coin_id)) {
+        chartState.selectedCoins = [manifest.default_coin_id];
+    }
+    if (Number.isFinite(Number(manifest.default_cycle_number))) {
+        chartState.activeCycles = new Set([Number(manifest.default_cycle_number)]);
+    }
+    else {
+        // 기본 코인: BTC 자동 선택 (이미 selectedCoins 에 세팅되어 있음)
+        // 기본 사이클: CURRENT / 최신 사이클을 포함해 존재하는 사이클 중 최대 번호를 활성화
+        const allCycleNums = new Set();
+        getManifestCoins().forEach((coin) => {
+            (coin.cycles || []).forEach((c) => allCycleNums.add(Number(c.cycle_number)));
+        });
+        if (allCycleNums.size > 0) {
+            const maxCycle = Math.max(...Array.from(allCycleNums.values()));
+            chartState.activeCycles = new Set([maxCycle]);
+        }
     }
     // BOX ZONE 기본 활성화 버튼 스타일 동기화
     const boxBtn = document.getElementById('toggleBox');
     if (boxBtn) {
         boxBtn.style.cssText = chartState.showBoxZone
-            ? 'border-color:#ffbf49;color:#ffbf49;background:rgba(255,191,73,0.13)'
-            : 'border-color:#334b6a;color:#4f6685;background:transparent';
+            ? 'border-color:#FFB800;color:#FFB800;background:rgba(255,184,0,0.1)'
+            : 'border-color:#4a6080;color:#4a6080;';
     }
 }
 // ── Wire DOM events & expose toggles for onclick ───────

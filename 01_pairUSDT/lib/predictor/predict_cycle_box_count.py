@@ -44,7 +44,9 @@ def get_completed_cycle_box_counts(
                SUM(CASE WHEN UPPER(phase) = 'BEAR' THEN 1 ELSE 0 END) AS bear_count,
                SUM(CASE WHEN UPPER(phase) = 'BULL' THEN 1 ELSE 0 END) AS bull_count
         FROM coin_analysis_results
-        WHERE coin_id = ? AND is_completed = 1
+        WHERE coin_id = ?
+          AND is_completed = 1
+          AND UPPER(COALESCE(cycle_name, '')) NOT LIKE '%CURRENT%'
         GROUP BY cycle_number
         ORDER BY cycle_number
         """,
@@ -65,7 +67,9 @@ def get_btc_completed_cycle_box_counts(conn: Any) -> list[tuple[int, int, int]]:
                SUM(CASE WHEN UPPER(phase) = 'BEAR' THEN 1 ELSE 0 END) AS bear_count,
                SUM(CASE WHEN UPPER(phase) = 'BULL' THEN 1 ELSE 0 END) AS bull_count
         FROM coin_analysis_results
-        WHERE UPPER(symbol) = 'BTC' AND is_completed = 1
+        WHERE UPPER(symbol) = 'BTC'
+          AND is_completed = 1
+          AND UPPER(COALESCE(cycle_name, '')) NOT LIKE '%CURRENT%'
         GROUP BY cycle_number
         ORDER BY cycle_number
         """
@@ -116,6 +120,17 @@ def _apply_guards(
     return bear_final, bull_final, guard_bear, guard_bull
 
 
+def _nearest_previous_count(
+    counts: list[tuple[int, int, int]],
+    target_cycle_number: int,
+    index: int,
+) -> int:
+    previous = [c for c in counts if c[0] < target_cycle_number]
+    if not previous:
+        return MIN_BOX_COUNT
+    return int(previous[-1][index])
+
+
 def predict_cycle_box_counts(
     conn: Any,
     target_cycle_number: int,
@@ -133,12 +148,8 @@ def predict_cycle_box_counts(
     if len(counts) < 2:
         return None
     max_cyc = max(c[0] for c in counts)
-    prev_bear = next(
-        (c[1] for c in counts if c[0] == target_cycle_number - 1), MIN_BOX_COUNT
-    )
-    prev_bull = next(
-        (c[2] for c in counts if c[0] == target_cycle_number - 1), MIN_BOX_COUNT
-    )
+    prev_bear = _nearest_previous_count(counts, target_cycle_number, 1)
+    prev_bull = _nearest_previous_count(counts, target_cycle_number, 2)
 
     if target_cycle_number <= max_cyc:
         observed = next((c for c in counts if c[0] == target_cycle_number), None)
@@ -148,16 +159,11 @@ def predict_cycle_box_counts(
     else:
         points_bear = [(c[0], float(c[1])) for c in counts]
         points_bull = [(c[0], float(c[2])) for c in counts]
-        for cyc in range(max_cyc + 1, target_cycle_number + 1):
-            raw_bear = _linear_regression_predict(points_bear, cyc)
-            raw_bull = _linear_regression_predict(points_bull, cyc)
-            bear_count, bull_count, guard_bear, guard_bull = _apply_guards(
-                raw_bear, raw_bull, prev_bear, prev_bull
-            )
-            if cyc < target_cycle_number:
-                points_bear.append((cyc, float(bear_count)))
-                points_bull.append((cyc, float(bull_count)))
-                prev_bear, prev_bull = bear_count, bull_count
+        raw_bear = _linear_regression_predict(points_bear, target_cycle_number)
+        raw_bull = _linear_regression_predict(points_bull, target_cycle_number)
+        bear_count, bull_count, guard_bear, guard_bull = _apply_guards(
+            raw_bear, raw_bull, prev_bear, prev_bull
+        )
         return CyclePrediction(
             cycle_number=target_cycle_number,
             bear_count=bear_count,
