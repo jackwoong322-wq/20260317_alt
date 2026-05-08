@@ -90,7 +90,9 @@ function drawCycleForCoin(state, coinId, coinData, coinIdx, cycle, legendItems) 
     const color = resolveCycleColor(state, coinIdx, cycleNum);
     const isCurr = cycle.cycle_name.toLowerCase().includes('current');
     // Bear 예측 시 저점일(startX)을 LOW로 표시. 없으면 기존 cycle 최저점 사용
-    const bearStartIdx = findBearStartLowIdx(cycle.data, cycle.box_zones);
+    const bearStartIdx = state.showPrediction
+        ? findBearStartLowIdx(cycle.data, cycle.box_zones)
+        : null;
     const cycleMinLowIdx = bearStartIdx ?? findCycleMinLowIdx(cycle.data);
     const closeKey = buildCloseKey(coinId, cycle.cycle_number);
     const lineSeries = addMainLineSeries(state, coinId, coinData, cycle, color, isCurr, cycleNum, cycleMinLowIdx, closeKey);

@@ -28,6 +28,8 @@ function addSinglePathSeries(pts, color, kind, seriesKey, meta) {
     chartState.seriesMap[seriesKey] = pathSeries;
 }
 export function addPredictionPaths(coinId, coinData, cycle, cycleNum) {
+    if (!chartState.showPrediction)
+        return;
     if (!cycle.prediction_paths)
         return;
     let bullPts = sanitizePathPoints(cycle.prediction_paths.bull || []);

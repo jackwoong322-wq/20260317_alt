@@ -85,7 +85,10 @@ export function addBoxZoneSeries(coinId, coinData, cycle, cycleNum, cycleMinLowI
         return;
     }
     const hasDbZones = cycle.box_zones && cycle.box_zones.length > 0;
-    const zones = hasDbZones ? cycle.box_zones : detectBoxZones(cycle.data);
+    const rawZones = hasDbZones ? cycle.box_zones : detectBoxZones(cycle.data);
+    const zones = chartState.showPrediction
+        ? rawZones
+        : rawZones.filter((z) => z.is_prediction !== 1);
     zones.forEach((z, zi) => {
         if (!isValidZone(z))
             return;
@@ -124,6 +127,8 @@ export function addActiveBoxExtensions(coinId, coinData, cycle, cycleNum) {
     const lastRealDay = cycle.data[cycle.data.length - 1]?.x ?? 0;
     const lastRealClose = cycle.data[cycle.data.length - 1]?.close ?? 100;
     cycle.box_zones.forEach((z) => {
+        if (!chartState.showPrediction && z.is_prediction === 1)
+            return;
         const result = String(z.result || '').toUpperCase();
         const isAct = result === 'BEAR_ACTIVE' || result === 'BULL_ACTIVE' ||
             result === 'PRED_BEAR_ACTIVE' || result === 'PRED_BULL_ACTIVE';

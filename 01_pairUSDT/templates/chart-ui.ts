@@ -203,11 +203,11 @@ function toggleBoxZone() {
 }
 
 function toggleBearBull() {
-  chartState.showBearBull = !chartState.showBearBull;
+  chartState.showPrediction = !chartState.showPrediction;
   const btn = document.getElementById('toggleBearBull') as HTMLButtonElement | null;
   if (btn) {
-    btn.style.cssText = chartState.showBearBull
-      ? 'border-color:#a0f0c0;color:#a0f0c0;background:rgba(0,255,136,0.08)'
+    btn.style.cssText = chartState.showPrediction
+      ? 'border-color:#ff6bb5;color:#ff6bb5;background:rgba(255,107,181,0.1)'
       : 'border-color:#4a6080;color:#4a6080;';
   }
   drawChart();
@@ -243,6 +243,12 @@ export function initDefaults() {
   if (boxBtn) {
     boxBtn.style.cssText = chartState.showBoxZone
       ? 'border-color:#FFB800;color:#FFB800;background:rgba(255,184,0,0.1)'
+      : 'border-color:#4a6080;color:#4a6080;';
+  }
+  const predictionBtn = document.getElementById('toggleBearBull') as HTMLButtonElement | null;
+  if (predictionBtn) {
+    predictionBtn.style.cssText = chartState.showPrediction
+      ? 'border-color:#ff6bb5;color:#ff6bb5;background:rgba(255,107,181,0.1)'
       : 'border-color:#4a6080;color:#4a6080;';
   }
 }

@@ -44,6 +44,7 @@ export function addPredictionPaths(
   cycle: any,
   cycleNum: number,
 ): void {
+  if (!chartState.showPrediction) return;
   if (!cycle.prediction_paths) return;
 
   let bullPts = sanitizePathPoints(cycle.prediction_paths.bull || []);

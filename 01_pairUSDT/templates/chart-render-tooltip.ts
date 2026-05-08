@@ -5,6 +5,28 @@ import { CYCLE_COLORS, COIN_COLORS } from './chart-logic.js';
 
 declare const ALL_DATA: any;
 
+function normalizedRateToUsd(rate: number | null | undefined, cycle: any): number | null {
+  const basePrice = Number(cycle?.peak_price);
+  const normalizedRate = Number(rate);
+  if (!Number.isFinite(basePrice) || basePrice <= 0 || !Number.isFinite(normalizedRate)) {
+    return null;
+  }
+  return (basePrice * normalizedRate) / 100;
+}
+
+function formatUsdDetailed(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) {
+    return '-';
+  }
+  const fractionDigits = Math.abs(value) >= 1000 ? 0 : Math.abs(value) >= 10 ? 2 : 4;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(value);
+}
+
 // ── Crosshair Tooltip ─────────────────────────────────
 export function setupTooltip(): void {
   const tooltip = document.getElementById('crosshairTooltip');
@@ -78,8 +100,13 @@ export function setupTooltip(): void {
         const firstBullZi = r.boxInfo.firstBullZi ?? -1;
         const isBear = z.phase === 'BEAR';
         const isPred = z.is_prediction === 1;
+        if (isPred && !chartState.showPrediction) {
+          return;
+        }
         const boxColor = isBear ? '#ff4466' : '#FFB800';
         const dayInBox = dayX - z.startX + 1;
+        const hiUsd = formatUsdDetailed(normalizedRateToUsd(z.hi, r.cycle));
+        const loUsd = formatUsdDetailed(normalizedRateToUsd(z.lo, r.cycle));
 
         const hiLabel = isBear
           ? '현재박스 저점 대비'
@@ -180,10 +207,10 @@ export function setupTooltip(): void {
         }</div>
           <div style="display:flex;justify-content:space-between;font-size:10px;margin:2px 0;"><span style="color:#4a6080">고점</span><span style="color:#fff;font-weight:600">${z.hi.toFixed(
             2,
-          )}%</span>${hiChg}</div>
+          )}% / ${hiUsd}</span>${hiChg}</div>
           <div style="display:flex;justify-content:space-between;font-size:10px;margin:2px 0;"><span style="color:#4a6080">저점</span><span style="color:#fff;font-weight:600">${z.lo.toFixed(
             2,
-          )}%</span>${loChg}</div>
+          )}% / ${loUsd}</span>${loChg}</div>
           <div style="display:flex;justify-content:space-between;font-size:10px;margin:2px 0;"><span style="color:#4a6080">기간</span><span style="color:#fff;">day ${
           z.startX
         }~${z.endX} (${z.duration ?? '-'}일)</span></div>
