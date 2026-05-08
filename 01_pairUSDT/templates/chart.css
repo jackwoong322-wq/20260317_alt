@@ -344,8 +344,37 @@
   .bz-label.bull { color: #FFB800; }
 
   /* 예측 박스 마크 (더 진하고 눈에 띄게) */
-  .bz-mark.prediction { opacity: 0.9; }
-  .bz-label.prediction { opacity: 0.95; font-style: italic; }
+  .bz-mark.prediction { opacity: 0.64; }
+  .bz-label.prediction { opacity: 0.68; font-style: italic; }
+
+  .forecast-guide {
+    position: absolute;
+    top: 0;
+    width: 0;
+    border-left: 1px dashed rgba(170, 190, 220, 0.48);
+    pointer-events: none;
+    z-index: 18;
+  }
+  .forecast-guide.forecast { border-left-color: rgba(255, 105, 180, 0.44); }
+  .forecast-guide-label {
+    position: absolute;
+    transform: translateX(-50%);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    pointer-events: none;
+    z-index: 24;
+    color: #c6d6f2;
+    background: rgba(7, 12, 22, 0.76);
+    border: 1px solid rgba(120, 145, 185, 0.35);
+  }
+  .forecast-guide-label.forecast {
+    color: #ff8fc7;
+    border-color: rgba(255, 105, 180, 0.38);
+  }
 
   /* 예측 경로 끝 라벨 */
   .pred-path-end {
@@ -355,6 +384,7 @@
     white-space: nowrap;
     pointer-events: none;
     z-index: 20;
+    opacity: 0.48;
   }
 
   /* 사이클 저점 마크: 큰 다이아몬드 */

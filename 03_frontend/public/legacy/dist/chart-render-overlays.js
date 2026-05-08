@@ -1,6 +1,6 @@
 // Overlay elements: box marks, bear/bull labels, cycle low & prediction markers
 import { chartState } from './chart-logic.js';
-import { getBtcAnchorInfo, getPhaseBoxStatsForSymbol, dayToTime, timeToDay, getScenarioKey, SCENARIO_STYLE } from './chart-logic.js';
+import { getBtcAnchorInfo, getPhaseBoxStatsForSymbol, dayToTime, timeToDay, getScenarioKey, SCENARIO_STYLE, getVisiblePredictionZoneIndexes, getVisiblePredictionDayRanges } from './chart-logic.js';
 function normalizedRateToUsd(rate, cycleRef) {
     const basePrice = Number(cycleRef?.peak_price);
     const normalizedRate = Number(rate);
@@ -160,14 +160,58 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
         }
         placed.push(getLabelRectInOverlay(el));
     }
+    function addForecastGuide(day, label, kind) {
+        const dayNum = Number(day);
+        if (!Number.isFinite(dayNum)) {
+            return;
+        }
+        let x = timeScale.timeToCoordinate(dayToTime(dayNum));
+        if (x === null) {
+            x = clampCoordToVisible(timeScale, dayNum, overlayWidth);
+        }
+        const guide = document.createElement('div');
+        guide.className = `forecast-guide ${kind}`;
+        guide.style.left = x + 'px';
+        guide.style.height = chartHeight + 'px';
+        overlay.appendChild(guide);
+        chartState.boxMarkEls.push(guide);
+        const guideLabel = document.createElement('div');
+        guideLabel.className = `forecast-guide-label ${kind}`;
+        guideLabel.textContent = label;
+        guideLabel.style.left = Math.max(44, Math.min(overlayWidth - 44, x)) + 'px';
+        guideLabel.style.top = '8px';
+        overlay.appendChild(guideLabel);
+        chartState.boxMarkEls.push(guideLabel);
+    }
     const btcAnchor = getBtcAnchorInfo(cycleNumber);
     const phaseBoxStats = getPhaseBoxStatsForSymbol(coinSymbol, 'BULL'); // BULL/Bear 모두 참고
     const isBtcChart = (coinSymbol || '').toUpperCase() === 'BTC';
+    const predictionScopeZones = zones.length > 0 ? zones : cycleRef?.box_zones || [];
+    const visiblePredictionIndexes = getVisiblePredictionZoneIndexes(predictionScopeZones, cycleData);
+    const visiblePredictionDayRanges = getVisiblePredictionDayRanges(predictionScopeZones, cycleData);
+    const isVisiblePredictionDay = (day) => {
+        const dayNum = Number(day);
+        if (!Number.isFinite(dayNum)) {
+            return false;
+        }
+        if (visiblePredictionDayRanges === null) {
+            return chartState.showPrediction;
+        }
+        return visiblePredictionDayRanges.some((range) => dayNum >= range.startX && dayNum <= range.endX);
+    };
+    const firstVisiblePrediction = Array.from(visiblePredictionIndexes)
+        .map((idx) => predictionScopeZones[idx])
+        .filter(Boolean)
+        .sort((a, b) => Number(a.startX) - Number(b.startX) || Number(a.endX) - Number(b.endX))[0];
+    if (chartState.showPrediction && visiblePredictionIndexes.size > 0) {
+        addForecastGuide(cycleData[cycleData.length - 1]?.x, 'NOW', 'now');
+        addForecastGuide(firstVisiblePrediction?.startX, 'FORECAST', 'forecast');
+    }
     if (chartState.showBoxZone && zones.length > 0) {
         zones.forEach((z, zi) => {
             const isBear = z.phase === 'BEAR';
             const isPrediction = z.is_prediction === 1; // 예측 박스 플래그
-            if (isPrediction && !chartState.showPrediction) {
+            if (isPrediction && !visiblePredictionIndexes.has(zi)) {
                 return;
             }
             const result = String(z.result || '').toUpperCase();
@@ -688,6 +732,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
     if (chartState.showPrediction && cycleRef && cycleRef.peak_predictions && cycleRef.peak_predictions.length > 0) {
         cycleRef.peak_predictions.forEach((p) => {
             const dayX = p.day_x;
+            if (!isVisiblePredictionDay(dayX))
+                return;
             if (p.value == null || !Number.isFinite(p.value))
                 return;
             let val = p.value;
@@ -742,11 +788,11 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
     }
     // prediction path end labels
     if (chartState.showPrediction && cycleRef && cycleRef.prediction_paths) {
-        const bullPts = cycleRef.prediction_paths.bull;
-        const bearPts = cycleRef.prediction_paths.bear;
+        const bullPts = cycleRef.prediction_paths.bull || [];
+        const bearPts = cycleRef.prediction_paths.bear || [];
         if (bullPts && bullPts.length > 1) {
             const lastU = bullPts[bullPts.length - 1];
-            if (lastU && lastU.value != null && Number.isFinite(lastU.value)) {
+            if (lastU && lastU.value != null && Number.isFinite(lastU.value) && isVisiblePredictionDay(lastU.x)) {
                 const xU = timeScale.timeToCoordinate(dayToTime(lastU.x));
                 if (xU == null)
                     return;
@@ -765,7 +811,7 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
         }
         if (bearPts && bearPts.length > 1) {
             const lastB = bearPts[bearPts.length - 1];
-            if (lastB && lastB.value != null && Number.isFinite(lastB.value)) {
+            if (lastB && lastB.value != null && Number.isFinite(lastB.value) && isVisiblePredictionDay(lastB.x)) {
                 const xEnd = timeScale.timeToCoordinate(dayToTime(lastB.x));
                 if (xEnd == null)
                     return;
