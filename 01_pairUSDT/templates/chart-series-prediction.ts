@@ -1,6 +1,6 @@
 // ── Prediction path series (bull / bear dotted lines) ──────────────────────
 import { chartState } from './chart-logic.js';
-import { dayToTime, buildStepSeries, sanitizePathPoints } from './chart-logic.js';
+import { dayToTime, buildStepSeries, sanitizePathPoints, getVisiblePredictionDayRanges } from './chart-logic.js';
 import { setSeriesDataSafe, filterValidPoints } from './chart-series-helpers.js';
 
 declare const LightweightCharts: any;
@@ -28,7 +28,7 @@ function addSinglePathSeries(
 
   const pathSeries = chartState.chart.addLineSeries({
     color,
-    lineWidth: 2,
+    lineWidth: 1,
     lineStyle: LightweightCharts.LineStyle.Dotted,
     priceLineVisible: false,
     lastValueVisible: false,
@@ -49,19 +49,29 @@ export function addPredictionPaths(
 
   let bullPts = sanitizePathPoints(cycle.prediction_paths.bull || []);
   let bearPts = sanitizePathPoints(cycle.prediction_paths.bear || []);
+  const visibleRanges = getVisiblePredictionDayRanges(cycle.box_zones || [], cycle.data || []);
+  if (visibleRanges !== null) {
+    const isVisibleDay = (day: any) => {
+      const dayNum = Number(day);
+      return Number.isFinite(dayNum) &&
+        visibleRanges.some((range) => dayNum >= range.startX && dayNum <= range.endX);
+    };
+    bullPts = bullPts.filter((p: any) => isVisibleDay(p.x));
+    bearPts = bearPts.filter((p: any) => isVisibleDay(p.x));
+  }
 
   const meta = { coinId, symbol: coinData.symbol, cycleName: cycle.cycle_name, cycleNum };
 
   if (bullPts && bullPts.length > 1) {
     addSinglePathSeries(
-      bullPts, 'rgba(255,217,102,0.85)', 'pred_bull',
+      bullPts, 'rgba(255,217,102,0.36)', 'pred_bull',
       `${coinId}_${cycle.cycle_number}_path_bull`, meta,
     );
   }
 
   if (bearPts && bearPts.length > 1) {
     addSinglePathSeries(
-      bearPts, 'rgba(255,107,107,0.85)', 'pred_bear',
+      bearPts, 'rgba(255,107,107,0.36)', 'pred_bear',
       `${coinId}_${cycle.cycle_number}_path_bear`, meta,
     );
   }

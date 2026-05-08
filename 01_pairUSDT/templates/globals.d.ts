@@ -37,6 +37,7 @@ declare let showHighLow: boolean;
 declare let showBoxZone: boolean;
 declare let showBearBull: boolean;
 declare let showPrediction: boolean;
+declare let showExtendedForecast: boolean;
 declare let seriesMap: Record<string, any>;
 declare let seriesMetaMap: Record<string, any>;
 

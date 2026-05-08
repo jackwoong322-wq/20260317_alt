@@ -469,8 +469,40 @@ body {
 
 .bz-label.bear { color: #ff7f9f; }
 .bz-label.bull { color: #ffcf63; }
-.bz-mark.prediction { opacity: 0.9; }
-.bz-label.prediction { opacity: 0.96; font-style: italic; }
+.bz-mark.prediction { opacity: 0.64; }
+.bz-label.prediction { opacity: 0.68; font-style: italic; }
+
+.forecast-guide {
+  position: absolute;
+  top: 0;
+  width: 0;
+  border-left: 1px dashed rgba(170, 190, 220, 0.48);
+  pointer-events: none;
+  z-index: 18;
+}
+
+.forecast-guide.forecast { border-left-color: rgba(255, 105, 180, 0.44); }
+
+.forecast-guide-label {
+  position: absolute;
+  transform: translateX(-50%);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  pointer-events: none;
+  z-index: 24;
+  color: #c6d6f2;
+  background: rgba(7, 12, 22, 0.76);
+  border: 1px solid rgba(120, 145, 185, 0.35);
+}
+
+.forecast-guide-label.forecast {
+  color: #ff8fc7;
+  border-color: rgba(255, 105, 180, 0.38);
+}
 
 .pred-path-end {
   position: absolute;
@@ -479,6 +511,7 @@ body {
   white-space: nowrap;
   font-size: 0.76rem;
   font-weight: 700;
+  opacity: 0.48;
 }
 
 .cycle-low-mark {

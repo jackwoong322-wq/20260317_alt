@@ -72,6 +72,7 @@ const _state = {
     showBoxZone: true,
     showBearBull: false,
     showPrediction: true,
+    showExtendedForecast: false,
     bearBullLabels: [],
     boxMarkEls: [],
     boxMarksData: [],
@@ -100,6 +101,8 @@ export const chartState = {
     set showBearBull(v) { _state.showBearBull = v; },
     get showPrediction() { return _state.showPrediction; },
     set showPrediction(v) { _state.showPrediction = v; },
+    get showExtendedForecast() { return _state.showExtendedForecast; },
+    set showExtendedForecast(v) { _state.showExtendedForecast = v; },
     get boxMarkEls() { return _state.boxMarkEls; },
     set boxMarkEls(v) { _state.boxMarkEls = v; },
     get bearBullLabels() { return _state.bearBullLabels; },
@@ -440,13 +443,122 @@ export function getPhaseBoxStatsForSymbol(symbol, phase) {
     return { avg, max };
 }
 // ── Lookup box info at given day (for tooltip) ────────
+export function getVisiblePredictionZoneIndexes(zones, cycleData) {
+    const visible = new Set();
+    if (!_state.showPrediction || !zones || zones.length === 0) {
+        return visible;
+    }
+    const predictionIndexes = zones
+        .map((z, idx) => ({ z, idx }))
+        .filter(({ z }) => z?.is_prediction === 1)
+        .sort((a, b) => {
+        const startDiff = Number(a.z.startX) - Number(b.z.startX);
+        return startDiff !== 0 ? startDiff : Number(a.z.endX) - Number(b.z.endX);
+    });
+    if (predictionIndexes.length === 0) {
+        return visible;
+    }
+    if (_state.showExtendedForecast) {
+        predictionIndexes.forEach(({ idx }) => visible.add(idx));
+        return visible;
+    }
+    const lastRealDay = cycleData && cycleData.length > 0
+        ? Number(cycleData[cycleData.length - 1]?.x)
+        : NaN;
+    const active = predictionIndexes.find(({ z }) => {
+        const result = String(z.result || '').toUpperCase();
+        const isActive = result === 'BEAR_ACTIVE' || result === 'BULL_ACTIVE' ||
+            result === 'PRED_BEAR_ACTIVE' || result === 'PRED_BULL_ACTIVE';
+        const containsLastReal = Number.isFinite(lastRealDay) &&
+            Number(z.startX) <= lastRealDay &&
+            lastRealDay <= Number(z.endX);
+        return isActive || containsLastReal;
+    });
+    if (active) {
+        visible.add(active.idx);
+    }
+    const activeOrder = active
+        ? predictionIndexes.findIndex(({ idx }) => idx === active.idx)
+        : -1;
+    const next = predictionIndexes.find(({ z }, order) => {
+        if (active && order <= activeOrder) {
+            return false;
+        }
+        return !Number.isFinite(lastRealDay) || Number(z.endX) >= lastRealDay;
+    });
+    if (next) {
+        visible.add(next.idx);
+    }
+    if (!active && !next) {
+        visible.add(predictionIndexes[0].idx);
+    }
+    return visible;
+}
+export function isZoneVisibleForPredictionScope(zones, cycleData, index) {
+    const z = zones?.[index];
+    if (!z || z.is_prediction !== 1) {
+        return true;
+    }
+    return getVisiblePredictionZoneIndexes(zones, cycleData).has(index);
+}
+export function getVisiblePredictionEndDay(zones, cycleData) {
+    const ranges = getVisiblePredictionDayRanges(zones, cycleData);
+    if (ranges === null) {
+        return null;
+    }
+    let endDay = null;
+    ranges.forEach((range) => {
+        if (Number.isFinite(range.endX)) {
+            endDay = endDay == null ? range.endX : Math.max(endDay, range.endX);
+        }
+    });
+    return endDay;
+}
+export function getVisiblePredictionDayRanges(zones, cycleData) {
+    if (!_state.showPrediction) {
+        return [];
+    }
+    const hasPredictionZones = !!zones?.some((z) => z?.is_prediction === 1);
+    if (!hasPredictionZones) {
+        return _state.showExtendedForecast ? null : [];
+    }
+    const visible = getVisiblePredictionZoneIndexes(zones, cycleData);
+    const ranges = [];
+    visible.forEach((idx) => {
+        const z = zones?.[idx];
+        const startX = Number(z?.startX);
+        const endX = Number(z?.endX);
+        if (Number.isFinite(startX) && Number.isFinite(endX)) {
+            ranges.push({ startX, endX });
+        }
+    });
+    return ranges.sort((a, b) => a.startX - b.startX || a.endX - b.endX);
+}
+export function isDayInVisiblePredictionScope(day, zones, cycleData) {
+    if (!_state.showPrediction) {
+        return false;
+    }
+    const dayNum = Number(day);
+    if (!Number.isFinite(dayNum)) {
+        return false;
+    }
+    const ranges = getVisiblePredictionDayRanges(zones, cycleData);
+    if (ranges === null) {
+        return true;
+    }
+    return ranges.some((range) => dayNum >= range.startX && dayNum <= range.endX);
+}
 export function findBoxAtDay(dayX, coinId, cycleNum) {
     for (const bmd of _state.boxMarksData) {
         if (bmd.seriesKey !== `${coinId}_${cycleNum}_close`)
             continue;
         const firstBullZi = bmd.zones.findIndex((z) => z.phase === 'BULL');
+        const visiblePredictionIndexes = getVisiblePredictionZoneIndexes(bmd.zones, bmd.cycleData);
         for (let zi = 0; zi < bmd.zones.length; zi++) {
             const z = bmd.zones[zi];
+            if (z.is_prediction === 1 && !visiblePredictionIndexes.has(zi)) {
+                continue;
+            }
             if (dayX >= z.startX && dayX <= z.endX) {
                 const prev = bmd.zones[zi - 1] || null;
                 const cycleLow = bmd.cycleData[bmd.cycleLowIdx]?.low ?? null;

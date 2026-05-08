@@ -204,12 +204,35 @@ function toggleBoxZone() {
 
 function toggleBearBull() {
   chartState.showPrediction = !chartState.showPrediction;
+  if (!chartState.showPrediction) {
+    chartState.showExtendedForecast = false;
+  }
   const btn = document.getElementById('toggleBearBull') as HTMLButtonElement | null;
   if (btn) {
     btn.style.cssText = chartState.showPrediction
       ? 'border-color:#ff6bb5;color:#ff6bb5;background:rgba(255,107,181,0.1)'
       : 'border-color:#4a6080;color:#4a6080;';
   }
+  updateExtendedForecastButton();
+  drawChart();
+}
+
+function updateExtendedForecastButton(): void {
+  const btn = document.getElementById('toggleExtendedForecast') as HTMLButtonElement | null;
+  if (!btn) return;
+  btn.disabled = !chartState.showPrediction;
+  btn.style.cssText =
+    chartState.showPrediction && chartState.showExtendedForecast
+      ? 'border-color:#a78bfa;color:#d8ccff;background:rgba(167,139,250,0.12)'
+      : chartState.showPrediction
+      ? 'border-color:#4a6080;color:#4a6080;'
+      : 'border-color:#26364f;color:#344966;opacity:0.55;';
+}
+
+function toggleExtendedForecast() {
+  if (!chartState.showPrediction) return;
+  chartState.showExtendedForecast = !chartState.showExtendedForecast;
+  updateExtendedForecastButton();
   drawChart();
 }
 
@@ -251,6 +274,7 @@ export function initDefaults() {
       ? 'border-color:#ff6bb5;color:#ff6bb5;background:rgba(255,107,181,0.1)'
       : 'border-color:#4a6080;color:#4a6080;';
   }
+  updateExtendedForecastButton();
 }
 
 // ── Wire DOM events & expose toggles for onclick ───────
@@ -264,4 +288,5 @@ if (searchInput) {
 (window as any).toggleHighLow = toggleHighLow;
 (window as any).toggleBoxZone = toggleBoxZone;
 (window as any).toggleBearBull = toggleBearBull;
+(window as any).toggleExtendedForecast = toggleExtendedForecast;
 

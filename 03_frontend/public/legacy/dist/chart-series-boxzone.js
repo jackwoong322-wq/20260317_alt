@@ -1,6 +1,6 @@
 // ── Box zone series (hi/lo lines, fill area, active extension) ─────────────
 import { chartState } from './chart-logic.js';
-import { dayToTime, detectBoxZones } from './chart-logic.js';
+import { dayToTime, detectBoxZones, getVisiblePredictionZoneIndexes } from './chart-logic.js';
 import { setSeriesDataSafe, filterValidPoints } from './chart-series-helpers.js';
 import { renderBoxMarks } from './chart-render-overlays.js';
 // z.hi / z.lo / z.startX / z.endX 가 하나라도 NaN/null 이면 skip
@@ -20,7 +20,7 @@ function safePrice(val, fallback = 0) {
 function getBoxZoneColors(isPred, isBearBox) {
     if (isPred) {
         const rgb = isBearBox ? '255,107,107' : '255,217,102';
-        return { lineColor: `rgba(${rgb},0.80)`, fillTop: `rgba(${rgb},0.10)`, fillBot: `rgba(${rgb},0.01)` };
+        return { lineColor: `rgba(${rgb},0.38)`, fillTop: `rgba(${rgb},0.075)`, fillBot: `rgba(${rgb},0.01)` };
     }
     const rgb = isBearBox ? '255,68,102' : '255,184,0';
     return { lineColor: `rgba(${rgb},0.85)`, fillTop: `rgba(${rgb},0.14)`, fillBot: `rgba(${rgb},0.04)` };
@@ -86,10 +86,11 @@ export function addBoxZoneSeries(coinId, coinData, cycle, cycleNum, cycleMinLowI
     }
     const hasDbZones = cycle.box_zones && cycle.box_zones.length > 0;
     const rawZones = hasDbZones ? cycle.box_zones : detectBoxZones(cycle.data);
-    const zones = chartState.showPrediction
-        ? rawZones
-        : rawZones.filter((z) => z.is_prediction !== 1);
-    zones.forEach((z, zi) => {
+    const visiblePredictionIndexes = getVisiblePredictionZoneIndexes(rawZones, cycle.data);
+    const zones = rawZones;
+    rawZones.forEach((z, zi) => {
+        if (z.is_prediction === 1 && !visiblePredictionIndexes.has(zi))
+            return;
         if (!isValidZone(z))
             return;
         const { lineColor, fillTop, fillBot } = getBoxZoneColors(z.is_prediction === 1, z.phase === 'BEAR');
@@ -126,8 +127,9 @@ export function addActiveBoxExtensions(coinId, coinData, cycle, cycleNum) {
         return;
     const lastRealDay = cycle.data[cycle.data.length - 1]?.x ?? 0;
     const lastRealClose = cycle.data[cycle.data.length - 1]?.close ?? 100;
-    cycle.box_zones.forEach((z) => {
-        if (!chartState.showPrediction && z.is_prediction === 1)
+    const visiblePredictionIndexes = getVisiblePredictionZoneIndexes(cycle.box_zones, cycle.data);
+    cycle.box_zones.forEach((z, zi) => {
+        if (z.is_prediction === 1 && !visiblePredictionIndexes.has(zi))
             return;
         const result = String(z.result || '').toUpperCase();
         const isAct = result === 'BEAR_ACTIVE' || result === 'BULL_ACTIVE' ||
