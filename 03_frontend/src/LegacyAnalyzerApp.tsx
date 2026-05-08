@@ -125,7 +125,6 @@ export default function LegacyAnalyzerApp() {
       title="ALT/BTC Cycle Analyzer"
       srcDoc={srcDoc}
       style={styles.frame}
-      sandbox="allow-scripts allow-same-origin"
     />
   )
 }

@@ -36,6 +36,7 @@ declare let activeCycles: Set<number>;
 declare let showHighLow: boolean;
 declare let showBoxZone: boolean;
 declare let showBearBull: boolean;
+declare let showPrediction: boolean;
 declare let seriesMap: Record<string, any>;
 declare let seriesMetaMap: Record<string, any>;
 

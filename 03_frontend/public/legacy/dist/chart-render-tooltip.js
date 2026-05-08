@@ -2,6 +2,26 @@
 import { chartState } from './chart-logic.js';
 import { timeToDay, findBoxAtDay } from './chart-logic.js';
 import { CYCLE_COLORS, COIN_COLORS } from './chart-logic.js';
+function normalizedRateToUsd(rate, cycle) {
+    const basePrice = Number(cycle?.peak_price);
+    const normalizedRate = Number(rate);
+    if (!Number.isFinite(basePrice) || basePrice <= 0 || !Number.isFinite(normalizedRate)) {
+        return null;
+    }
+    return (basePrice * normalizedRate) / 100;
+}
+function formatUsdDetailed(value) {
+    if (value == null || !Number.isFinite(value)) {
+        return '-';
+    }
+    const fractionDigits = Math.abs(value) >= 1000 ? 0 : Math.abs(value) >= 10 ? 2 : 4;
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
+    }).format(value);
+}
 // ── Crosshair Tooltip ─────────────────────────────────
 export function setupTooltip() {
     const tooltip = document.getElementById('crosshairTooltip');
@@ -67,8 +87,13 @@ export function setupTooltip() {
                 const firstBullZi = r.boxInfo.firstBullZi ?? -1;
                 const isBear = z.phase === 'BEAR';
                 const isPred = z.is_prediction === 1;
+                if (isPred && !chartState.showPrediction) {
+                    return;
+                }
                 const boxColor = isBear ? '#ff4466' : '#FFB800';
                 const dayInBox = dayX - z.startX + 1;
+                const hiUsd = formatUsdDetailed(normalizedRateToUsd(z.hi, r.cycle));
+                const loUsd = formatUsdDetailed(normalizedRateToUsd(z.lo, r.cycle));
                 const hiLabel = isBear
                     ? '현재박스 저점 대비'
                     : zi === firstBullZi && cycleLow != null
@@ -154,8 +179,8 @@ export function setupTooltip() {
           <div style="font-size:10px;font-weight:700;color:${boxColor};margin-bottom:4px;letter-spacing:1px;">${z.phase} Box #${z.boxIndex != null ? z.boxIndex + 1 : zi + 1}${isPred
                     ? ' <span style="color:#00d4ff;font-size:9px">[PRED]</span>'
                     : ''}</div>
-          <div style="display:flex;justify-content:space-between;font-size:10px;margin:2px 0;"><span style="color:#4a6080">고점</span><span style="color:#fff;font-weight:600">${z.hi.toFixed(2)}%</span>${hiChg}</div>
-          <div style="display:flex;justify-content:space-between;font-size:10px;margin:2px 0;"><span style="color:#4a6080">저점</span><span style="color:#fff;font-weight:600">${z.lo.toFixed(2)}%</span>${loChg}</div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;margin:2px 0;"><span style="color:#4a6080">고점</span><span style="color:#fff;font-weight:600">${z.hi.toFixed(2)}% / ${hiUsd}</span>${hiChg}</div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;margin:2px 0;"><span style="color:#4a6080">저점</span><span style="color:#fff;font-weight:600">${z.lo.toFixed(2)}% / ${loUsd}</span>${loChg}</div>
           <div style="display:flex;justify-content:space-between;font-size:10px;margin:2px 0;"><span style="color:#4a6080">기간</span><span style="color:#fff;">day ${z.startX}~${z.endX} (${z.duration ?? '-'}일)</span></div>
           <div style="display:flex;justify-content:space-between;font-size:10px;margin:2px 0;"><span style="color:#4a6080">현위치</span><span style="color:#fff;">${dayInBox}/${z.duration ?? '-'}일</span></div>
           <div style="display:flex;justify-content:space-between;font-size:10px;margin:2px 0;"><span style="color:#4a6080">Range</span><span style="color:#fff;">${rpStr}%</span></div>

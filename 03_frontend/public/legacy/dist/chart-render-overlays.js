@@ -1,6 +1,64 @@
 // Overlay elements: box marks, bear/bull labels, cycle low & prediction markers
 import { chartState } from './chart-logic.js';
 import { getBtcAnchorInfo, getPhaseBoxStatsForSymbol, dayToTime, timeToDay, getScenarioKey, SCENARIO_STYLE } from './chart-logic.js';
+function normalizedRateToUsd(rate, cycleRef) {
+    const basePrice = Number(cycleRef?.peak_price);
+    const normalizedRate = Number(rate);
+    if (!Number.isFinite(basePrice) || basePrice <= 0 || !Number.isFinite(normalizedRate)) {
+        return null;
+    }
+    return (basePrice * normalizedRate) / 100;
+}
+function formatUsdCompact(value) {
+    if (value == null || !Number.isFinite(value)) {
+        return '';
+    }
+    if (Math.abs(value) >= 1000) {
+        return `$${Math.round(value / 1000)}K`;
+    }
+    if (Math.abs(value) >= 10) {
+        return `$${Math.round(value)}`;
+    }
+    return `$${value.toFixed(2)}`;
+}
+function formatUsdDetailed(value) {
+    if (value == null || !Number.isFinite(value)) {
+        return '-';
+    }
+    const fractionDigits = Math.abs(value) >= 1000 ? 0 : Math.abs(value) >= 10 ? 2 : 4;
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
+    }).format(value);
+}
+function formatSignedPct(value) {
+    if (value == null) {
+        return '';
+    }
+    const num = Number(value);
+    if (!Number.isFinite(num)) {
+        return '';
+    }
+    return `${num >= 0 ? '+' : ''}${num.toFixed(1)}%`;
+}
+function elapsedDays(fromDay, toDay) {
+    const from = Number(fromDay);
+    const to = Number(toDay);
+    if (!Number.isFinite(from) || !Number.isFinite(to)) {
+        return null;
+    }
+    return Math.max(0, Math.round(to - from));
+}
+function formatBoxLabel(prefix, boxNo, rate, usdValue, changePct, days, suffix = '') {
+    const usdText = formatUsdCompact(usdValue);
+    const changeText = formatSignedPct(changePct);
+    const dayText = days == null ? '' : `${days}d`;
+    const rateText = `${rate.toFixed(1)}%${usdText ? `(${usdText})` : ''}`;
+    const moveText = changeText ? `${changeText}${dayText ? `(${dayText})` : ''}` : '';
+    return [prefix + boxNo, rateText, moveText].filter(Boolean).join(' ') + suffix;
+}
 /** [Why] 확대 시 timeToCoordinate가 화면 밖 시간에 null 반환 → 가장자리로 클램프해 주석 유지 */
 function clampCoordToVisible(timeScale, day, overlayWidth) {
     if (overlayWidth <= 0)
@@ -50,6 +108,31 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
     const LABEL_GAP = 10;
     const NUDGE_X = 56;
     const NUDGE_Y = 24;
+    function findBoxExtremeDay(box, field) {
+        if (!box) {
+            return null;
+        }
+        const explicitDay = field === 'high' ? box.hiDay : box.loDay;
+        if (Number.isFinite(Number(explicitDay))) {
+            return Number(explicitDay);
+        }
+        let bestDay = null;
+        let bestValue = field === 'high' ? -Infinity : Infinity;
+        for (const d of cycleData) {
+            if (d.x < box.startX || d.x > box.endX) {
+                continue;
+            }
+            const value = Number(d[field]);
+            if (!Number.isFinite(value)) {
+                continue;
+            }
+            if ((field === 'high' && value > bestValue) || (field === 'low' && value < bestValue)) {
+                bestValue = value;
+                bestDay = Number(d.x);
+            }
+        }
+        return bestDay;
+    }
     function rectsOverlap(a, b, gap) {
         return !(a.right + gap < b.left || b.right + gap < a.left || a.bottom + gap < b.top || b.bottom + gap < a.top);
     }
@@ -84,6 +167,9 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
         zones.forEach((z, zi) => {
             const isBear = z.phase === 'BEAR';
             const isPrediction = z.is_prediction === 1; // 예측 박스 플래그
+            if (isPrediction && !chartState.showPrediction) {
+                return;
+            }
             const result = String(z.result || '').toUpperCase();
             const isActive = (result === 'BEAR_ACTIVE' || result === 'BULL_ACTIVE' ||
                 result === 'PRED_BEAR_ACTIVE' || result === 'PRED_BULL_ACTIVE');
@@ -222,11 +308,27 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             if (xHi === null || xLo === null || rawYHi === null || rawYLo === null) {
                 return;
             }
-            const hiVsPrevLo = refLowForHigh != null
-                ? (((z.hi - refLowForHigh) / refLowForHigh) * 100).toFixed(1)
+            const prevHighDay = prevBox ? findBoxExtremeDay(prevBox, 'high') : null;
+            const prevLowDay = prevBox ? findBoxExtremeDay(prevBox, 'low') : null;
+            const cycleLowDay = cycleData[cycleLowIdx]?.x ?? null;
+            const refLowDayForHigh = isBear
+                ? loDay
+                : zi === firstBullZi && cycleLow != null
+                    ? cycleLowDay
+                    : prevBox
+                        ? prevLowDay
+                        : 0;
+            const refHighDayForLow = isBear ? (prevBox ? prevHighDay : 0) : hiDay;
+            const hiVsPrevLo = refLowForHigh != null && refLowForHigh !== 0
+                ? (((hiVal - refLowForHigh) / refLowForHigh) * 100).toFixed(1)
                 : null;
-            const loVsPrevHi = (((z.lo - refHighForLow) / refHighForLow) *
-                100).toFixed(1);
+            const loVsPrevHi = refHighForLow != null && refHighForLow !== 0
+                ? (((loVal - refHighForLow) / refHighForLow) * 100).toFixed(1)
+                : null;
+            const hiElapsedDays = elapsedDays(refLowDayForHigh, hiDay);
+            const loElapsedDays = elapsedDays(refHighDayForLow, loDay);
+            const hiUsd = normalizedRateToUsd(hiVal, cycleRef);
+            const loUsd = normalizedRateToUsd(loVal, cycleRef);
             const sKey = isPrediction ? getScenarioKey(z.result) : null;
             const sStyle = sKey ? SCENARIO_STYLE[sKey] : null;
             const effectiveBear = isActive ? isActiveBear : isBear;
@@ -269,19 +371,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             const lblHi = document.createElement('div');
             lblHi.className = 'bz-label' + (isPrediction ? ' prediction' : '');
             lblHi.style.color = hiLblColor;
-            let hiText;
-            if (isPrediction) {
-                const chg = hiVsPrevLo !== null
-                    ? ` ${parseFloat(hiVsPrevLo) >= 0 ? '+' : ''}${parseFloat(hiVsPrevLo).toFixed(1)}%`
-                    : '';
-                hiText = `H${z.boxIndex != null ? z.boxIndex + 1 : zi + 1} ${z.hi.toFixed(1)}%${chg}${scenTag}`;
-            }
-            else {
-                const chg = hiVsPrevLo !== null
-                    ? ` ${parseFloat(hiVsPrevLo) >= 0 ? '+' : ''}${parseFloat(hiVsPrevLo).toFixed(1)}%`
-                    : '';
-                hiText = `H${zi + 1} ${z.hi.toFixed(1)}%${chg}`;
-            }
+            const hiBoxNo = isPrediction && z.boxIndex != null ? z.boxIndex + 1 : zi + 1;
+            const hiText = formatBoxLabel('H', hiBoxNo, hiVal, hiUsd, hiVsPrevLo, hiElapsedDays, isPrediction ? scenTag : '');
             lblHi.textContent = hiText;
             const startPxHi = timeScale.timeToCoordinate(dayToTime(z.startX));
             const endPxHi = timeScale.timeToCoordinate(dayToTime(z.endX));
@@ -328,19 +419,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             const lblLo = document.createElement('div');
             lblLo.className = 'bz-label' + (isPrediction ? ' prediction' : '');
             lblLo.style.color = loLblColor;
-            let loText;
-            if (isPrediction) {
-                const chg = loVsPrevHi !== null
-                    ? ` ${parseFloat(loVsPrevHi) >= 0 ? '+' : ''}${parseFloat(loVsPrevHi).toFixed(1)}%`
-                    : '';
-                loText = `L${z.boxIndex != null ? z.boxIndex + 1 : zi + 1} ${z.lo.toFixed(1)}%${chg}`;
-            }
-            else {
-                const chg = loVsPrevHi !== null
-                    ? ` ${parseFloat(loVsPrevHi) >= 0 ? '+' : ''}${parseFloat(loVsPrevHi).toFixed(1)}%`
-                    : '';
-                loText = `L${zi + 1} ${z.lo.toFixed(1)}%${chg}`;
-            }
+            const loBoxNo = isPrediction && z.boxIndex != null ? z.boxIndex + 1 : zi + 1;
+            const loText = formatBoxLabel('L', loBoxNo, loVal, loUsd, loVsPrevHi, loElapsedDays);
             lblLo.textContent = loText;
             const startPxLo = timeScale.timeToCoordinate(dayToTime(z.startX));
             const endPxLo = timeScale.timeToCoordinate(dayToTime(z.endX));
@@ -438,6 +518,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                             ? '직전 박스 고점대비'
                             : '100%대비'
                         : '현재 박스 고점대비';
+                    const hiElapsedText = hiElapsedDays == null ? '-' : hiElapsedDays + 'd';
+                    const loElapsedText = loElapsedDays == null ? '-' : loElapsedDays + 'd';
                     tooltip.innerHTML =
                         '<div class="bt-title" style="color:' +
                             (isBear ? '#ff4466' : '#FFB800') +
@@ -448,20 +530,28 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                             predBadge +
                             '</div>' +
                             '<div class="bt-row"><span class="bt-key">고점</span><span class="bt-val">' +
-                            z.hi.toFixed(2) +
-                            '%</span>' +
+                            hiVal.toFixed(2) +
+                            '% / ' +
+                            formatUsdDetailed(hiUsd) +
+                            '</span>' +
                             hiChg +
                             '</div>' +
                             '<div class="bt-row"><span class="bt-key" style="font-size:9px;opacity:0.6">&nbsp;' +
                             hiRefLabel +
+                            ' / ' +
+                            hiElapsedText +
                             '</span></div>' +
                             '<div class="bt-row"><span class="bt-key">저점</span><span class="bt-val">' +
-                            z.lo.toFixed(2) +
-                            '%</span>' +
+                            loVal.toFixed(2) +
+                            '% / ' +
+                            formatUsdDetailed(loUsd) +
+                            '</span>' +
                             loChg +
                             '</div>' +
                             '<div class="bt-row"><span class="bt-key" style="font-size:9px;opacity:0.6">&nbsp;' +
                             loRefLabel +
+                            ' / ' +
+                            loElapsedText +
                             '</span></div>' +
                             '<div class="bt-row"><span class="bt-key">기간</span><span class="bt-val">day ' +
                             z.startX +
@@ -491,8 +581,11 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                         left = e.clientX - rect.left - 290;
                     if (top < 0)
                         top = 4;
-                    if (top + 400 > rect.height)
-                        top = rect.height - 410;
+                    const tooltipHeight = Math.min(tooltip.offsetHeight || 410, Math.max(rect.height - 8, 120));
+                    if (top + tooltipHeight > rect.height)
+                        top = rect.height - tooltipHeight - 4;
+                    if (top < 4)
+                        top = 4;
                     tooltip.style.left = left + 'px';
                     tooltip.style.top = top + 'px';
                 });
@@ -506,6 +599,11 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                     if (left + 280 > rect.width)
                         left = e.clientX - rect.left - 290;
                     if (top < 0)
+                        top = 4;
+                    const tooltipHeight = Math.min(tooltip.offsetHeight || 410, Math.max(rect.height - 8, 120));
+                    if (top + tooltipHeight > rect.height)
+                        top = rect.height - tooltipHeight - 4;
+                    if (top < 4)
                         top = 4;
                     tooltip.style.left = left + 'px';
                     tooltip.style.top = top + 'px';
@@ -587,7 +685,7 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
         tooltip.style.display = 'none';
     });
     // peak/bottom prediction markers
-    if (cycleRef && cycleRef.peak_predictions && cycleRef.peak_predictions.length > 0) {
+    if (chartState.showPrediction && cycleRef && cycleRef.peak_predictions && cycleRef.peak_predictions.length > 0) {
         cycleRef.peak_predictions.forEach((p) => {
             const dayX = p.day_x;
             if (p.value == null || !Number.isFinite(p.value))
@@ -643,7 +741,7 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
         });
     }
     // prediction path end labels
-    if (cycleRef && cycleRef.prediction_paths) {
+    if (chartState.showPrediction && cycleRef && cycleRef.prediction_paths) {
         const bullPts = cycleRef.prediction_paths.bull;
         const bearPts = cycleRef.prediction_paths.bear;
         if (bullPts && bullPts.length > 1) {
