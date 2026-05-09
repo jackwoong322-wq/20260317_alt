@@ -17,6 +17,7 @@ from pathlib import Path
 import requests
 
 from lib.common.config import SUPABASE_ANON_KEY, SUPABASE_URL
+from lib.subbox.payload import build_sub_box_payload
 from lib.visualizer.renderer import generate_html, rewrite_dist_imports
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -242,6 +243,10 @@ def build_json_from_supabase() -> dict:
                 cn, {"bull": [], "bear": []}
             )
             cycle_peaks = peak_by_coin_cycle.get(coin_id, {}).get(cn, [])
+            sub_boxes, sub_box_candidates = build_sub_box_payload(
+                cycle_data.get("data", []),
+                cycle_zones,
+            )
             cycles_list.append(
                 {
                     "cycle_number": cn,
@@ -252,6 +257,8 @@ def build_json_from_supabase() -> dict:
                     "box_zones": cycle_zones,
                     "prediction_paths": cycle_paths,
                     "peak_predictions": cycle_peaks,
+                    "sub_boxes": sub_boxes,
+                    "sub_box_candidates": sub_box_candidates,
                 }
             )
 

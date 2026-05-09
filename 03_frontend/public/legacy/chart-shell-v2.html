@@ -32,6 +32,7 @@
         <button class="cycle-btn" id="toggleBox" onclick="toggleBoxZone()">BOX ZONE</button>
         <button class="cycle-btn" id="toggleBearBull" onclick="toggleBearBull()">PREDICT</button>
         <button class="cycle-btn" id="toggleExtendedForecast" onclick="toggleExtendedForecast()">EXTENDED</button>
+        <button class="cycle-btn" id="toggleSubBox" onclick="toggleSubBox()">SUB-BOX</button>
       </div>
     </div>
 
@@ -67,6 +68,14 @@ function resolveDevApiBaseUrl() {
     return window.__API_BASE_URL__;
   }
 
+  const isLocalDevShell =
+    window.location.protocol === 'file:' ||
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1';
+  if (!isLocalDevShell) {
+    throw new Error('Legacy chart shell requires React-injected dashboard data in production.');
+  }
+
   const params = new URLSearchParams(window.location.search);
   const requestedApiBaseUrl = params.get('apiBaseUrl');
   if (requestedApiBaseUrl) {
@@ -75,7 +84,6 @@ function resolveDevApiBaseUrl() {
       const allowedHosts = new Set([
         'localhost',
         '127.0.0.1',
-        'two0260317-alt.onrender.com',
       ]);
       if (allowedHosts.has(requested.hostname)) {
         return requested.origin;

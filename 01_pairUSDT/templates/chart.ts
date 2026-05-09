@@ -5,7 +5,6 @@ import { buildCoinList, buildCycleToggles, initDefaults } from './chart-ui.js';
 import { drawChart } from './chart-draw.js';
 import {
   initLoadStateFromInitial,
-  scheduleBackgroundCyclePreload,
 } from './chart-lazy-load.js';
 
 function initApp(): void {
@@ -20,7 +19,6 @@ function initApp(): void {
       buildCoinList();
       buildCycleToggles();
       drawChart();
-      scheduleBackgroundCyclePreload();
     });
   });
 }

@@ -1,18 +1,23 @@
 import os
+import sys
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException
 from db import fetch_all_rows, get_supabase
 
+PAIRUSDT_ROOT = Path(__file__).resolve().parents[2] / "01_pairUSDT"
+if str(PAIRUSDT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PAIRUSDT_ROOT))
+
+from lib.subbox.payload import build_sub_box_payload
+
 router = APIRouter()
 
 _DASHBOARD_CACHE_TTL_SECONDS = 600
-_DASHBOARD_LEGACY_CACHE: dict[str, object] = {
-    "data": None,
-    "created_at": 0.0,
-}
 _DASHBOARD_SNAPSHOT_CACHE: dict[str, object] = {
     "snapshot": None,
     "created_at": 0.0,
@@ -69,16 +74,8 @@ def chart_data(coin_id: str):
 
 @router.get("/dashboard-data")
 def dashboard_data():
-    if _is_legacy_cache_fresh():
-        return _DASHBOARD_LEGACY_CACHE["data"]
-
-    with _DASHBOARD_REFRESH_LOCK:
-        if _is_legacy_cache_fresh():
-            return _DASHBOARD_LEGACY_CACHE["data"]
-        data = _build_dashboard_data()
-        _DASHBOARD_LEGACY_CACHE["data"] = data
-        _DASHBOARD_LEGACY_CACHE["created_at"] = time.time()
-        return data
+    snapshot, _cache_status = _get_or_build_dashboard_snapshot()
+    return snapshot["data"]
 
 
 @router.get("/dashboard-manifest")
@@ -150,7 +147,9 @@ def dashboard_cycle_data(coin_id: str, cycle_number: int):
             detail=f"cycle_number={cycle_number} not found for coin_id={coin_id}",
         )
 
-    cycle_data = _build_cycle_payload(coin_id, cycle_number, cycle_manifest)
+    cycle_data = _find_snapshot_cycle(snapshot, coin_id, cycle_number)
+    if cycle_data is None:
+        cycle_data = _empty_cycle_payload(cycle_number, cycle_manifest)
 
     return {
         "data_version": snapshot["data_version"],
@@ -175,8 +174,6 @@ def refresh_dashboard_cache(x_internal_secret: str | None = Header(default=None)
             now = time.time()
             _DASHBOARD_SNAPSHOT_CACHE["snapshot"] = snapshot
             _DASHBOARD_SNAPSHOT_CACHE["created_at"] = now
-            _DASHBOARD_LEGACY_CACHE["data"] = None
-            _DASHBOARD_LEGACY_CACHE["created_at"] = 0.0
         except Exception:
             return {
                 "ok": False,
@@ -201,13 +198,6 @@ def _is_cache_fresh(cache: dict[str, object]) -> bool:
     if cache.get("snapshot") is None:
         return False
     created_at = float(cache.get("created_at") or 0.0)
-    return (time.time() - created_at) < _DASHBOARD_CACHE_TTL_SECONDS
-
-
-def _is_legacy_cache_fresh() -> bool:
-    if _DASHBOARD_LEGACY_CACHE.get("data") is None:
-        return False
-    created_at = float(_DASHBOARD_LEGACY_CACHE.get("created_at") or 0.0)
     return (time.time() - created_at) < _DASHBOARD_CACHE_TTL_SECONDS
 
 
@@ -237,28 +227,11 @@ def _get_or_build_dashboard_snapshot() -> tuple[dict, str]:
 
 
 def _build_dashboard_snapshot() -> dict:
-    sb = get_supabase()
-    coins_rows = fetch_all_rows(
-        sb.table("coins").select("id, symbol, name, rank").order("rank")
-    )
-    summary_rows = fetch_all_rows(
-        sb.table("alt_cycle_summary")
-        .select("coin_id, cycle_number, cycle_name, peak_date, peak_price")
-        .order("coin_id")
-        .order("cycle_number")
-    )
-    if not summary_rows:
-        summary_rows = fetch_all_rows(
-            sb.table("coin_analysis_results")
-            .select("coin_id, cycle_number")
-            .order("coin_id")
-            .order("cycle_number")
-        )
-    manifest = _build_manifest_from_rows(coins_rows, summary_rows)
-    data = _build_initial_data_from_manifest(manifest)
+    data, coins_rows, summary_rows = _build_dashboard_data(return_coins=True)
+    manifest = _build_manifest_from_dashboard_data(coins_rows, data, summary_rows)
     now = datetime.now(timezone.utc)
     generated_at = now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    data_version = "snapshot-" + now.strftime("%Y%m%dT%H%M%SZ")
+    data_version = "snapshot-" + now.strftime("%Y%m%dT%H%M%S%fZ") + "-" + uuid.uuid4().hex
     return {
         "data_version": data_version,
         "generated_at": generated_at,
@@ -274,9 +247,50 @@ def _find_manifest_coin(manifest: dict, coin_id: str) -> dict | None:
     )
 
 
-def _build_manifest_from_rows(coins_rows: list[dict], cycle_rows: list[dict]) -> dict:
+def _find_snapshot_cycle(snapshot: dict, coin_id: str, cycle_number: int) -> dict | None:
+    coin_data = snapshot.get("data", {}).get(coin_id, {})
+    for cycle in coin_data.get("cycles", []):
+        if int(cycle.get("cycle_number") or 0) == int(cycle_number):
+            return cycle
+    return None
+
+
+def _empty_cycle_payload(cycle_number: int, cycle_manifest: dict | None = None) -> dict:
+    manifest = cycle_manifest or {}
+    return {
+        "cycle_number": cycle_number,
+        "cycle_name": manifest.get("cycle_name") or f"Cycle {cycle_number}",
+        "peak_date": manifest.get("peak_date"),
+        "peak_price": manifest.get("peak_price"),
+        "data": [],
+        "box_zones": [],
+        "prediction_paths": {"bull": [], "bear": []},
+        "peak_predictions": [],
+        "sub_boxes": [],
+        "sub_box_candidates": [],
+    }
+
+
+def _build_manifest_from_dashboard_data(
+    coins_rows: list[dict],
+    data: dict[str, dict],
+    summary_rows: list[dict] | None = None,
+) -> dict:
     cycles_by_coin: dict[str, dict[int, dict]] = {}
-    for row in cycle_rows:
+    for coin_id, coin_data in data.items():
+        for cycle in coin_data.get("cycles", []):
+            cycle_number = int(cycle.get("cycle_number") or 0)
+            if cycle_number <= 0:
+                continue
+            cycles_by_coin.setdefault(coin_id, {})[cycle_number] = {
+                "cycle_number": cycle_number,
+                "cycle_name": cycle.get("cycle_name"),
+                "peak_date": cycle.get("peak_date"),
+                "peak_price": cycle.get("peak_price"),
+                "has_data": _cycle_has_payload(cycle),
+            }
+
+    for row in summary_rows or []:
         coin_id = row.get("coin_id")
         cycle_number = int(row.get("cycle_number") or 0)
         if not coin_id or cycle_number <= 0:
@@ -288,6 +302,7 @@ def _build_manifest_from_rows(coins_rows: list[dict], cycle_rows: list[dict]) ->
                 "cycle_name": row.get("cycle_name"),
                 "peak_date": row.get("peak_date"),
                 "peak_price": row.get("peak_price"),
+                "has_data": False,
             },
         )
 
@@ -313,13 +328,14 @@ def _build_manifest_from_rows(coins_rows: list[dict], cycle_rows: list[dict]) ->
         coin_id = coin.get("id")
         if not coin_id:
             continue
-        cycles = []
         coin_cycles = list(cycles_by_coin.get(coin_id, {}).values())
         current_cycle_number = _get_default_cycle_number({"cycles": coin_cycles})
+        cycles = []
         for cycle in coin_cycles:
             cycle_number = int(cycle.get("cycle_number") or 0)
             if cycle_number <= 0:
                 continue
+            has_data = bool(cycle.get("has_data"))
             cycles.append(
                 {
                     "cycle_number": cycle_number,
@@ -331,10 +347,9 @@ def _build_manifest_from_rows(coins_rows: list[dict], cycle_rows: list[dict]) ->
                         default_coin_id == coin_id and cycle_number == default_cycle_number
                     ),
                     "can_lazy_load": True,
-                    "has_data": True,
+                    "has_data": has_data,
                 }
             )
-
         manifest_coins.append(
             {
                 "coin_id": coin_id,
@@ -349,152 +364,6 @@ def _build_manifest_from_rows(coins_rows: list[dict], cycle_rows: list[dict]) ->
         "default_coin_id": default_coin_id,
         "default_cycle_number": default_cycle_number,
         "coins": manifest_coins,
-    }
-
-
-def _build_initial_data_from_manifest(manifest: dict) -> dict[str, dict]:
-    default_coin_id = manifest.get("default_coin_id")
-    default_cycle_number = manifest.get("default_cycle_number")
-    initial_data: dict[str, dict] = {}
-
-    for coin_manifest in manifest.get("coins", []):
-        coin_id = coin_manifest.get("coin_id")
-        if not coin_id:
-            continue
-        initial_data[coin_id] = {
-            "symbol": coin_manifest.get("symbol"),
-            "name": coin_manifest.get("name"),
-            "rank": coin_manifest.get("rank"),
-            "cycles": [],
-        }
-
-    if default_coin_id and default_cycle_number:
-        default_manifest = _find_manifest_coin(manifest, default_coin_id)
-        default_cycle_manifest = None
-        if default_manifest:
-            default_cycle_manifest = next(
-                (
-                    cycle
-                    for cycle in default_manifest.get("cycles", [])
-                    if int(cycle.get("cycle_number") or 0) == int(default_cycle_number)
-                ),
-                None,
-            )
-        if default_coin_id in initial_data:
-            initial_data[default_coin_id]["cycles"] = [
-                _build_cycle_payload(
-                    default_coin_id,
-                    int(default_cycle_number),
-                    default_cycle_manifest or {},
-                )
-            ]
-
-    return initial_data
-
-
-def _build_cycle_payload(
-    coin_id: str,
-    cycle_number: int,
-    cycle_manifest: dict | None = None,
-) -> dict:
-    sb = get_supabase()
-    cycle_rows = fetch_all_rows(
-        sb.table("alt_cycle_data")
-        .select(
-            "coin_id, cycle_number, cycle_name, days_since_peak, close_rate, high_rate, low_rate, peak_date, peak_price, timestamp"
-        )
-        .eq("coin_id", coin_id)
-        .eq("cycle_number", cycle_number)
-        .order("days_since_peak")
-    )
-    box_rows = fetch_all_rows(
-        sb.table("coin_analysis_results")
-        .select(
-            "coin_id, cycle_number, box_index, phase, result, start_x, end_x, hi, lo, hi_day, lo_day, duration, range_pct, is_prediction, is_completed, rise_days, decline_days"
-        )
-        .eq("coin_id", coin_id)
-        .eq("cycle_number", cycle_number)
-        .order("box_index")
-    )
-    path_rows = fetch_all_rows(
-        sb.table("coin_prediction_paths")
-        .select("coin_id, cycle_number, scenario, day_x, value")
-        .eq("coin_id", coin_id)
-        .eq("cycle_number", cycle_number)
-        .order("scenario")
-        .order("day_x")
-    )
-    peak_rows = fetch_all_rows(
-        sb.table("coin_prediction_peaks")
-        .select("coin_id, cycle_number, peak_type, predicted_value, predicted_day")
-        .eq("coin_id", coin_id)
-        .eq("cycle_number", cycle_number)
-    )
-
-    manifest = cycle_manifest or {}
-    cycle_name = manifest.get("cycle_name")
-    peak_date = manifest.get("peak_date")
-    peak_price = manifest.get("peak_price")
-    data = []
-    for row in cycle_rows:
-        cycle_name = cycle_name or row.get("cycle_name")
-        peak_date = peak_date or row.get("peak_date")
-        peak_price = peak_price or row.get("peak_price")
-        data.append(
-            {
-                "x": int(row.get("days_since_peak") or 0),
-                "close": round(float(row.get("close_rate") or 0.0), 4),
-                "high": round(float(row.get("high_rate") or 0.0), 4),
-                "low": round(float(row.get("low_rate") or 0.0), 4),
-                "date": str(row.get("timestamp") or "")[:10],
-            }
-        )
-
-    box_zones = [
-        {
-            "boxIndex": int(row.get("box_index") or 0),
-            "startX": row.get("start_x"),
-            "endX": row.get("end_x"),
-            "hi": row.get("hi"),
-            "lo": row.get("lo"),
-            "hiDay": row.get("hi_day"),
-            "loDay": row.get("lo_day"),
-            "duration": row.get("duration"),
-            "rangePct": f"{float(row.get('range_pct') or 0.0):.1f}",
-            "phase": row.get("phase"),
-            "result": row.get("result"),
-            "is_prediction": row.get("is_prediction"),
-            "is_completed": row.get("is_completed"),
-            "rise_days": row.get("rise_days"),
-            "decline_days": row.get("decline_days"),
-        }
-        for row in box_rows
-    ]
-
-    prediction_paths = {"bull": [], "bear": []}
-    for row in path_rows:
-        key = str(row.get("scenario") or "").lower()
-        key = key if key in ("bull", "bear") else "bull"
-        prediction_paths[key].append({"x": row.get("day_x"), "value": row.get("value")})
-
-    peak_predictions = [
-        {
-            "type": row.get("peak_type"),
-            "value": row.get("predicted_value"),
-            "day_x": row.get("predicted_day"),
-        }
-        for row in peak_rows
-    ]
-
-    return {
-        "cycle_number": cycle_number,
-        "cycle_name": cycle_name or f"Cycle {cycle_number}",
-        "peak_date": peak_date,
-        "peak_price": peak_price,
-        "data": data,
-        "box_zones": _apply_active_box_display_from_first_pred(box_zones),
-        "prediction_paths": prediction_paths,
-        "peak_predictions": peak_predictions,
     }
 
 
@@ -530,6 +399,12 @@ def _build_dashboard_data(return_coins: bool = False):
 
     coins_rows = fetch_all_rows(
         sb.table("coins").select("id, symbol, name, rank").order("rank")
+    )
+    summary_rows = fetch_all_rows(
+        sb.table("alt_cycle_summary")
+        .select("coin_id, cycle_number, cycle_name, peak_date, peak_price")
+        .order("coin_id")
+        .order("cycle_number")
     )
     cycle_rows = fetch_all_rows(
         sb.table("alt_cycle_data")
@@ -678,6 +553,10 @@ def _build_dashboard_data(return_coins: bool = False):
                 cycle_num, {"bull": [], "bear": []}
             )
             cycle_peaks = peak_by_coin_cycle.get(coin_id, {}).get(cycle_num, [])
+            sub_boxes, sub_box_candidates = build_sub_box_payload(
+                cycle_data.get("data", []),
+                cycle_zones,
+            )
             cycles_list.append(
                 {
                     "cycle_number": cycle_num,
@@ -688,6 +567,8 @@ def _build_dashboard_data(return_coins: bool = False):
                     "box_zones": cycle_zones,
                     "prediction_paths": cycle_paths,
                     "peak_predictions": cycle_peaks,
+                    "sub_boxes": sub_boxes,
+                    "sub_box_candidates": sub_box_candidates,
                 }
             )
 
@@ -699,5 +580,5 @@ def _build_dashboard_data(return_coins: bool = False):
         }
 
     if return_coins:
-        return out, coins_rows
+        return out, coins_rows, summary_rows
     return out

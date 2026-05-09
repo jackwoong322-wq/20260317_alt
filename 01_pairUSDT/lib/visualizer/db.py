@@ -1,6 +1,8 @@
 # pairUSDT/lib/visualizer/db.py
 from typing import Any
 
+from lib.subbox.payload import build_sub_box_payload
+
 
 def load_all_coins(conn: Any) -> list:
     """실측(alt_cycle_data) 또는 박스 분석(coin_analysis_results)이 있는 코인 포함.
@@ -213,6 +215,10 @@ def build_json(conn: Any, coins: list) -> dict:
             cycle_zones = _apply_active_box_display_from_first_pred(raw_zones)
             cycle_paths = pred_paths.get(coin_id, {}).get(cn, {"bull": [], "bear": []})
             cycle_peaks = peak_preds.get(coin_id, {}).get(cn, [])
+            sub_boxes, sub_box_candidates = build_sub_box_payload(
+                cycle_data["data"],
+                cycle_zones,
+            )
             cycles_list.append(
                 {
                     "cycle_number": cn,
@@ -223,6 +229,8 @@ def build_json(conn: Any, coins: list) -> dict:
                     "box_zones": cycle_zones,
                     "prediction_paths": cycle_paths,
                     "peak_predictions": cycle_peaks,
+                    "sub_boxes": sub_boxes,
+                    "sub_box_candidates": sub_box_candidates,
                 }
             )
 

@@ -111,6 +111,84 @@ export function clearBearBullLabels() {
 }
 
 // ── renderBoxMarks (overlay) ──────────────────────────
+function safeSubBoxNumber(value: any): number | null {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function formatSubBoxRange(box: any): string {
+  const lower = safeSubBoxNumber(box?.lower);
+  const upper = safeSubBoxNumber(box?.upper);
+  if (lower == null || upper == null) return '';
+  return `${lower.toFixed(1)}~${upper.toFixed(1)}%`;
+}
+
+export function renderSubBoxMarks(
+  subBoxes: any[],
+  candidates: any[],
+  timeScale: any,
+  series: any,
+  coinId: string,
+  coinSymbol: string,
+  cycleNumber: number,
+): void {
+  if (!series || !timeScale) {
+    console.warn('[SERIES_NULL] renderSubBoxMarks', { coinId, coinSymbol, cycleNumber, hasSeries: !!series, hasTimeScale: !!timeScale });
+    return;
+  }
+  const overlay = document.getElementById('boxMarksOverlay');
+  const chartEl = document.getElementById('chart');
+  if (!overlay || !chartEl) return;
+
+  const chartHeight = chartEl.clientHeight || 0;
+  const overlayWidth = chartEl.clientWidth || 0;
+  const items = [
+    ...(Array.isArray(subBoxes) ? subBoxes.map((box) => ({ box, candidate: false })) : []),
+    ...(Array.isArray(candidates) ? candidates.map((box) => ({ box, candidate: true })) : []),
+  ];
+
+  items.forEach(({ box, candidate }) => {
+    const startX = safeSubBoxNumber(box.startX);
+    const endX = safeSubBoxNumber(box.endX);
+    const upper = safeSubBoxNumber(box.upper);
+    if (startX == null || endX == null || upper == null) return;
+
+    let x1 = timeScale.timeToCoordinate(dayToTime(startX));
+    let x2 = timeScale.timeToCoordinate(dayToTime(endX));
+    const y = series.priceToCoordinate(upper);
+    if (x1 === null) x1 = clampCoordToVisible(timeScale, startX, overlayWidth);
+    if (x2 === null) x2 = clampCoordToVisible(timeScale, endX, overlayWidth);
+    if (x1 === null || x2 === null || y === null) return;
+
+    const left = Math.max(0, Math.min(x1, x2));
+    const right = Math.min(overlayWidth, Math.max(x1, x2));
+    const width = Math.max(12, right - left);
+    const top = Math.max(18, Math.min(chartHeight - 28, y - 26));
+
+    const bracket = document.createElement('div');
+    bracket.className = 'subbox-bracket' + (candidate ? ' candidate' : '');
+    bracket.style.left = left + 'px';
+    bracket.style.top = top + 'px';
+    bracket.style.width = width + 'px';
+    overlay.appendChild(bracket);
+    chartState.boxMarkEls.push(bracket);
+
+    const label = document.createElement('div');
+    label.className = 'subbox-label' + (candidate ? ' candidate' : '');
+    const parentNo = box.parentBoxIndex != null ? `#${Number(box.parentBoxIndex) + 1}` : '';
+    const subLabel = box.subBoxLabel || '?';
+    const role = candidate ? ` ${String(box.scenarioRole || 'watch').replace(/_/g, ' ')}` : '';
+    const range = formatSubBoxRange(box);
+    label.textContent = candidate
+      ? `S${parentNo}-${subLabel} WATCH${role ? ` ·${role}` : ''}`
+      : `S${parentNo}-${subLabel} ${range}`;
+    label.style.left = Math.max(48, Math.min(overlayWidth - 48, left + width / 2)) + 'px';
+    label.style.top = Math.max(4, top - 16) + 'px';
+    overlay.appendChild(label);
+    chartState.boxMarkEls.push(label);
+  });
+}
+
 export function renderBoxMarks(
   zones: any[],
   cycleLowIdx: number,
