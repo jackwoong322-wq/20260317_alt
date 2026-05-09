@@ -54,6 +54,36 @@ FIXTURE_TABLES = {
             "timestamp": "2025-10-06T00:00:00",
         },
     ],
+    "alt_cycle_summary": [
+        {
+            "coin_id": "bitcoin",
+            "cycle_number": 1,
+            "cycle_name": "Cycle 2021",
+            "peak_date": "2021-11-10",
+            "peak_price": 69000,
+        },
+        {
+            "coin_id": "bitcoin",
+            "cycle_number": 2,
+            "cycle_name": "Current Cycle (2025)",
+            "peak_date": "2025-10-06",
+            "peak_price": 120000,
+        },
+        {
+            "coin_id": "ethereum",
+            "cycle_number": 1,
+            "cycle_name": "Cycle 2025",
+            "peak_date": "2025-10-06",
+            "peak_price": 4500,
+        },
+        {
+            "coin_id": "emptycoin",
+            "cycle_number": 3,
+            "cycle_name": "Cycle Without Rows",
+            "peak_date": "2026-01-01",
+            "peak_price": 10,
+        },
+    ],
     "coin_analysis_results": [
         {
             "coin_id": "bitcoin",
@@ -217,21 +247,62 @@ class DashboardCacheEndpointTests(unittest.TestCase):
         self.assertEqual(manifest["default_coin_id"], "bitcoin")
         self.assertEqual(manifest["default_cycle_number"], 2)
         self.assertIn("data_version", manifest)
+        empty_cycle = manifest["coins"][2]["cycles"][0]
+        self.assertEqual(empty_cycle["cycle_number"], 3)
+        self.assertTrue(empty_cycle["can_lazy_load"])
+        self.assertFalse(empty_cycle["has_data"])
         self.assertEqual(initial["data"]["bitcoin"]["cycles"][0]["cycle_number"], 2)
         self.assertEqual(initial["data"]["ethereum"]["cycles"], [])
         self.assertEqual(initial["data"]["emptycoin"]["cycles"], [])
 
     def test_cycle_data_returns_requested_cycle_from_snapshot(self):
+        manifest_response = self.client.get("/api/dashboard-manifest")
         response = self.client.get(
             "/api/dashboard-cycle-data?coin_id=ethereum&cycle_number=1"
         )
         payload = response.json()
 
+        self.assertEqual(manifest_response.status_code, 200)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["coin_id"], "ethereum")
         self.assertEqual(payload["symbol"], "ETH")
         self.assertEqual(payload["cycle"]["cycle_number"], 1)
         self.assertIn("cache_status", payload)
+        self.assertEqual(self.mock_get_supabase.call_count, 1)
+
+    def test_cycle_data_returns_empty_payload_for_manifest_cycle_without_rows(self):
+        response = self.client.get(
+            "/api/dashboard-cycle-data?coin_id=emptycoin&cycle_number=3"
+        )
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["coin_id"], "emptycoin")
+        self.assertEqual(payload["cycle"]["cycle_number"], 3)
+        self.assertEqual(payload["cycle"]["cycle_name"], "Cycle Without Rows")
+        self.assertEqual(payload["cycle"]["data"], [])
+        self.assertEqual(payload["cycle"]["box_zones"], [])
+
+    def test_dashboard_data_stale_snapshot_survives_refresh_failure(self):
+        first = self.client.get("/api/dashboard-data")
+        self.assertEqual(first.status_code, 200)
+
+        chart._DASHBOARD_SNAPSHOT_CACHE["created_at"] = 0.0
+        previous_snapshot = chart._DASHBOARD_SNAPSHOT_CACHE["snapshot"]
+        with patch("routers.chart._build_dashboard_snapshot", side_effect=RuntimeError):
+            second = self.client.get("/api/dashboard-data")
+
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.json(), first.json())
+        self.assertIs(chart._DASHBOARD_SNAPSHOT_CACHE["snapshot"], previous_snapshot)
+
+    def test_snapshot_data_version_changes_on_rebuild(self):
+        first = chart._build_dashboard_snapshot()
+        second = chart._build_dashboard_snapshot()
+
+        self.assertNotEqual(first["data_version"], second["data_version"])
+        self.assertTrue(first["data_version"].startswith("snapshot-"))
+        self.assertTrue(second["data_version"].startswith("snapshot-"))
 
     def test_cycle_data_returns_404_for_unknown_manifest_cycle(self):
         response = self.client.get(

@@ -40,7 +40,7 @@ async function loadActiveCyclesForSelection() {
     chartState.selectedCoins.forEach((coinId) => {
         chartState.activeCycles.forEach((cycleNumber) => {
             if (isCycleAvailable(coinId, cycleNumber)) {
-                tasks.push(ensureCycleLoaded(coinId, cycleNumber));
+                tasks.push(ensureCycleLoaded(coinId, cycleNumber, true, false));
             }
         });
     });
@@ -159,6 +159,7 @@ export function buildCycleToggles() {
         el.appendChild(btn);
     });
 }
+window.buildCycleToggles = buildCycleToggles;
 function toggleHighLow() {
     chartState.showHighLow = !chartState.showHighLow;
     const btn = document.getElementById('toggleRange');
@@ -212,9 +213,19 @@ function toggleExtendedForecast() {
     updateExtendedForecastButton();
     drawChart();
 }
+function toggleSubBox() {
+    chartState.showSubBox = !chartState.showSubBox;
+    const btn = document.getElementById('toggleSubBox');
+    if (btn) {
+        btn.style.cssText = chartState.showSubBox
+            ? 'border-color:#00d4ff;color:#00d4ff;background:rgba(0,212,255,0.10)'
+            : 'border-color:#4a6080;color:#4a6080;';
+    }
+    drawChart();
+}
 // ── Defaults & Bottom Override UI ─────────────────────
 export function initDefaults() {
-    const manifest = getDashboardManifest();
+    const manifest = getDashboardManifest() || {};
     if (typeof manifest.default_coin_id === 'string' &&
         getManifestCoins().some((coin) => coin.coin_id === manifest.default_coin_id)) {
         chartState.selectedCoins = [manifest.default_coin_id];
@@ -248,6 +259,12 @@ export function initDefaults() {
             : 'border-color:#4a6080;color:#4a6080;';
     }
     updateExtendedForecastButton();
+    const subBoxBtn = document.getElementById('toggleSubBox');
+    if (subBoxBtn) {
+        subBoxBtn.style.cssText = chartState.showSubBox
+            ? 'border-color:#00d4ff;color:#00d4ff;background:rgba(0,212,255,0.10)'
+            : 'border-color:#4a6080;color:#4a6080;';
+    }
 }
 // ── Wire DOM events & expose toggles for onclick ───────
 const searchInput = document.getElementById('searchInput');
@@ -261,3 +278,4 @@ window.toggleHighLow = toggleHighLow;
 window.toggleBoxZone = toggleBoxZone;
 window.toggleBearBull = toggleBearBull;
 window.toggleExtendedForecast = toggleExtendedForecast;
+window.toggleSubBox = toggleSubBox;

@@ -11,7 +11,12 @@ interface Window {
     loadingCycles: Map<string, Promise<void>>;
     loadError: Map<string, string>;
   } | null;
-  ensureCycleLoaded?: (coinId: string, cycleNumber: number) => Promise<void>;
+  ensureCycleLoaded?: (
+    coinId: string,
+    cycleNumber: number,
+    allowSnapshotReload?: boolean,
+    refreshView?: boolean,
+  ) => Promise<void>;
   getCycleStatus?: (coinId: string, cycleNumber: number) => string;
 }
 
@@ -38,6 +43,7 @@ declare let showBoxZone: boolean;
 declare let showBearBull: boolean;
 declare let showPrediction: boolean;
 declare let showExtendedForecast: boolean;
+declare let showSubBox: boolean;
 declare let seriesMap: Record<string, any>;
 declare let seriesMetaMap: Record<string, any>;
 

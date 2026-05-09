@@ -12,6 +12,7 @@ import { addHighLowSeries } from './chart-series-highlow.js';
 import { addBoxZoneSeries, addBoxZoneFallback, addActiveBoxExtensions } from './chart-series-boxzone.js';
 import { addPredictionPaths } from './chart-series-prediction.js';
 import { addBearBullSeries } from './chart-series-bearbull.js';
+import { addSubBoxSeries } from './chart-series-subbox.js';
 import { updateLegend, updateStats } from './chart-render-legend-stats.js';
 import { clearBearBullLabels, clearBoxMarks } from './chart-render-overlays.js';
 import { getCycleStatus } from './chart-lazy-load.js';
@@ -129,6 +130,7 @@ function drawCycleForCoin(
   }
 
   addActiveBoxExtensions(coinId, coinData, cycle, cycleNum);
+  addSubBoxSeries(coinId, coinData, cycle, cycleNum, lineSeries);
   addPredictionPaths(coinId, coinData, cycle, cycleNum);
   addBearBullSeries(coinId, coinData, cycle, cycleNum, lineSeries);
 

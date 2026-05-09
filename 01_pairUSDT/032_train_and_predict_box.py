@@ -7,6 +7,7 @@ Usage: python 032_train_and_predict_box.py
 
 import logging
 import math
+import os
 from typing import Any
 from datetime import datetime
 
@@ -50,11 +51,17 @@ from lib.predictor.predict import (
 log = logging.getLogger(__name__)
 
 SUPABASE_PAGE_SIZE = 1000
+DASHBOARD_CACHE_REFRESH_URL_ENV = "DASHBOARD_CACHE_REFRESH_URL"
+DASHBOARD_CACHE_REFRESH_SECRET_ENV = "DASHBOARD_CACHE_REFRESH_SECRET"
 
 
 class _NoOpConn:
     def close(self):
         return None
+
+
+class PredictionValidationError(ValueError):
+    """Raised when generated box scenarios violate chart-facing invariants."""
 
 
 def _normalize_json_value(v):
@@ -271,10 +278,279 @@ def _peak_rows_to_dicts(rows: list[tuple]) -> list[dict]:
     ]
 
 
+def _safe_int(value, default: int | None = None) -> int | None:
+    if value is None or pd.isna(value):
+        return default
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(parsed):
+        return default
+    return int(parsed)
+
+
+def _safe_float(value, default: float | None = None) -> float | None:
+    if value is None or pd.isna(value):
+        return default
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        return default
+    return parsed
+
+
+def _active_box_lookup(observed_df: pd.DataFrame | None) -> dict[tuple[str, int, int], dict]:
+    if observed_df is None or observed_df.empty:
+        return {}
+    required_cols = {"coin_id", "cycle_number", "box_index", "is_completed", "is_prediction"}
+    if not required_cols.issubset(set(observed_df.columns)):
+        return {}
+
+    active_rows = observed_df[
+        (observed_df["is_prediction"].astype(int) == 0)
+        & (observed_df["is_completed"].astype(int) == 0)
+    ]
+    lookup = {}
+    for _, row in active_rows.iterrows():
+        key = (
+            str(row["coin_id"]),
+            int(row["cycle_number"]),
+            int(row["box_index"]),
+        )
+        lookup[key] = row.to_dict()
+    return lookup
+
+
+def _observed_end_lookup(observed_df: pd.DataFrame | None) -> dict[tuple[str, int], int]:
+    if observed_df is None or observed_df.empty:
+        return {}
+    required_cols = {"coin_id", "cycle_number", "end_x"}
+    if not required_cols.issubset(set(observed_df.columns)):
+        return {}
+    lookup = {}
+    for (coin_id, cycle_number), grp in observed_df.groupby(["coin_id", "cycle_number"]):
+        lookup[(str(coin_id), int(cycle_number))] = int(grp["end_x"].max())
+    return lookup
+
+
+def _validate_prediction_dicts(
+    pred_dicts: list[dict],
+    path_dicts: list[dict],
+    peak_dicts: list[dict],
+    observed_df: pd.DataFrame | None = None,
+) -> None:
+    """Validate generated box scenarios before publishing them to Supabase."""
+    active_lookup = _active_box_lookup(observed_df)
+    observed_end_by_cycle = _observed_end_lookup(observed_df)
+    path_ranges: dict[tuple[str, int, str], list[int]] = {}
+    active_predictions: set[tuple[str, int, int]] = set()
+    prediction_keys: set[tuple[str, int, int]] = set()
+    errors: list[str] = []
+
+    for idx, row in enumerate(pred_dicts):
+        prefix = (
+            f"pred[{idx}] {row.get('symbol')} "
+            f"cy={row.get('cycle_number')} box={row.get('box_index')}"
+        )
+        if _safe_int(row.get("is_prediction"), 0) != 1:
+            errors.append(f"{prefix}: is_prediction must be 1")
+
+        start_x = _safe_int(row.get("start_x"))
+        end_x = _safe_int(row.get("end_x"))
+        duration = _safe_int(row.get("duration"))
+        hi = _safe_float(row.get("hi"))
+        lo = _safe_float(row.get("lo"))
+        hi_day = _safe_int(row.get("hi_day"), end_x)
+        lo_day = _safe_int(row.get("lo_day"), end_x)
+
+        if start_x is None or end_x is None or start_x > end_x:
+            errors.append(f"{prefix}: invalid start_x/end_x")
+        if hi is None or lo is None or hi < lo:
+            errors.append(f"{prefix}: hi must be >= lo")
+        if start_x is not None and end_x is not None:
+            expected_duration = end_x - start_x + 1
+            if duration is not None and duration != expected_duration:
+                errors.append(
+                    f"{prefix}: duration {duration} != {expected_duration}"
+                )
+            if hi_day is not None and not (start_x <= hi_day <= end_x):
+                errors.append(f"{prefix}: hi_day outside box range")
+            if lo_day is not None and not (start_x <= lo_day <= end_x):
+                errors.append(f"{prefix}: lo_day outside box range")
+
+        result = str(row.get("result") or "")
+        pred_key = (
+            str(row.get("coin_id")),
+            _safe_int(row.get("cycle_number"), -1),
+            _safe_int(row.get("box_index"), -1),
+        )
+        prediction_keys.add(pred_key)
+        scenario = "bull" if str(row.get("phase") or "").upper() == "BULL" else "bear"
+        if start_x is not None and end_x is not None:
+            range_key = (
+                str(row.get("coin_id")),
+                _safe_int(row.get("cycle_number"), -1),
+                scenario,
+            )
+            if range_key not in path_ranges:
+                path_ranges[range_key] = [start_x, end_x]
+            else:
+                path_ranges[range_key][0] = min(path_ranges[range_key][0], start_x)
+                path_ranges[range_key][1] = max(path_ranges[range_key][1], end_x)
+
+        if result in {"PRED_BEAR_ACTIVE", "PRED_BULL_ACTIVE"}:
+            active_predictions.add(pred_key)
+            active = active_lookup.get(pred_key)
+            if not active:
+                errors.append(f"{prefix}: active prediction has no observed ACTIVE row")
+            else:
+                active_start = _safe_int(active.get("start_x"))
+                active_end = _safe_int(active.get("end_x"))
+                if start_x != active_start:
+                    errors.append(
+                        f"{prefix}: active prediction start_x {start_x} != observed {active_start}"
+                    )
+                if end_x is not None and active_end is not None and end_x < active_end:
+                    errors.append(
+                        f"{prefix}: active prediction end_x {end_x} < observed {active_end}"
+                    )
+
+    for active_key, active in active_lookup.items():
+        if active_key in prediction_keys and active_key not in active_predictions:
+            errors.append(
+                "active prediction for "
+                f"{active.get('symbol', active_key[0])} cy={active_key[1]} "
+                f"box={active_key[2]} must use PRED_BEAR_ACTIVE/PRED_BULL_ACTIVE"
+            )
+        if active_key not in prediction_keys:
+            errors.append(
+                "missing active completion prediction for "
+                f"{active.get('symbol', active_key[0])} cy={active_key[1]} box={active_key[2]}"
+            )
+
+    for idx, row in enumerate(path_dicts):
+        prefix = (
+            f"path[{idx}] {row.get('symbol')} "
+            f"cy={row.get('cycle_number')} scenario={row.get('scenario')}"
+        )
+        scenario = str(row.get("scenario") or "").lower()
+        if scenario not in {"bear", "bull"}:
+            errors.append(f"{prefix}: invalid scenario")
+        start_x = _safe_int(row.get("start_x"))
+        end_x = _safe_int(row.get("end_x"))
+        day_x = _safe_int(row.get("day_x"))
+        value = _safe_float(row.get("value"))
+        range_key = (
+            str(row.get("coin_id")),
+            _safe_int(row.get("cycle_number"), -1),
+            scenario,
+        )
+        allowed_range = path_ranges.get(range_key)
+        if start_x is None or end_x is None or day_x is None:
+            errors.append(f"{prefix}: day_x outside path range")
+        elif start_x > end_x:
+            errors.append(f"{prefix}: invalid start_x/end_x")
+        elif allowed_range is None:
+            errors.append(f"{prefix}: no matching prediction scenario")
+        elif allowed_range is not None:
+            min_day = min(allowed_range[0], start_x)
+            max_day = max(allowed_range[1], end_x)
+            if not (min_day <= day_x <= max_day):
+                errors.append(f"{prefix}: day_x outside scenario range")
+        elif not (start_x <= day_x <= end_x):
+            errors.append(f"{prefix}: day_x outside path range")
+        if value is None or value <= 0:
+            errors.append(f"{prefix}: value must be positive")
+
+    for idx, row in enumerate(peak_dicts):
+        prefix = (
+            f"peak[{idx}] {row.get('symbol')} "
+            f"cy={row.get('cycle_number')} type={row.get('peak_type')}"
+        )
+        predicted_value = _safe_float(row.get("predicted_value"))
+        predicted_day = _safe_int(row.get("predicted_day"))
+        peak_type = str(row.get("peak_type") or "").upper()
+        if peak_type not in {"PEAK", "BOTTOM"}:
+            errors.append(f"{prefix}: invalid peak_type")
+        if predicted_value is None or predicted_value <= 0:
+            errors.append(f"{prefix}: predicted_value must be positive")
+        if predicted_day is None:
+            errors.append(f"{prefix}: predicted_day is required")
+        key = (str(row.get("coin_id")), _safe_int(row.get("cycle_number"), -1))
+        observed_end = observed_end_by_cycle.get(key)
+        if (
+            observed_end is not None
+            and predicted_day is not None
+            and predicted_day < observed_end
+        ):
+            errors.append(
+                f"{prefix}: predicted_day {predicted_day} < observed end {observed_end}"
+            )
+
+    if errors:
+        preview = "; ".join(errors[:5])
+        suffix = "" if len(errors) <= 5 else f"; ... +{len(errors) - 5} more"
+        raise PredictionValidationError(preview + suffix)
+
+
+def _prediction_scope_summary(pred_dicts: list[dict]) -> dict:
+    summary = {
+        "active_completion_rows": 0,
+        "next_box_rows": 0,
+        "extended_only_rows": 0,
+        "default_visible_rows": 0,
+    }
+    by_cycle: dict[tuple[str, int], list[dict]] = {}
+    for row in pred_dicts:
+        key = (str(row.get("coin_id")), int(row.get("cycle_number") or 0))
+        by_cycle.setdefault(key, []).append(row)
+
+    for rows in by_cycle.values():
+        ordered = sorted(
+            rows,
+            key=lambda r: (
+                int(r.get("box_index") or 0),
+                int(r.get("start_x") or 0),
+                str(r.get("result") or ""),
+            ),
+        )
+        active_rows = [
+            r
+            for r in ordered
+            if str(r.get("result") or "") in {"PRED_BEAR_ACTIVE", "PRED_BULL_ACTIVE"}
+        ]
+        future_rows = [r for r in ordered if r not in active_rows]
+        default_rows = active_rows + future_rows[:1]
+        summary["active_completion_rows"] += len(active_rows)
+        summary["next_box_rows"] += min(len(future_rows), 1)
+        summary["extended_only_rows"] += max(len(future_rows) - 1, 0)
+        summary["default_visible_rows"] += len(default_rows)
+
+    return summary
+
+
+def log_prediction_scenario_summary(
+    pred_dicts: list[dict], path_dicts: list[dict], peak_dicts: list[dict]
+) -> dict:
+    summary = _prediction_scope_summary(pred_dicts)
+    log.info(
+        "Box scenario summary: active_completion=%d next_box=%d "
+        "default_visible=%d extended_only=%d paths=%d markers=%d",
+        summary["active_completion_rows"],
+        summary["next_box_rows"],
+        summary["default_visible_rows"],
+        summary["extended_only_rows"],
+        len(path_dicts),
+        len(peak_dicts),
+    )
+    return summary
+
+
 def sync_predictions_to_supabase(
     pred_rows_or_conn: Any,
     path_rows: list[tuple] | None = None,
     peak_rows: list[tuple] | None = None,
+    observed_df: pd.DataFrame | None = None,
 ):
     if path_rows is None and peak_rows is None:
         return []
@@ -283,6 +559,16 @@ def sync_predictions_to_supabase(
     path_dicts = _path_rows_to_dicts(path_rows)
     peak_dicts = _peak_rows_to_dicts(peak_rows)
 
+    if not pred_dicts:
+        log.warning(
+            "No box scenario rows generated; skipping Supabase publish and preserving existing predictions."
+        )
+        return []
+
+    _validate_prediction_dicts(pred_dicts, path_dicts, peak_dicts, observed_df)
+    log_prediction_scenario_summary(pred_dicts, path_dicts, peak_dicts)
+
+    reset_predictions_supabase()
     _post_rows_supabase("coin_analysis_results", pred_dicts)
     log.info("coin_analysis_results 저장 완료: %d행", len(pred_dicts))
 
@@ -295,6 +581,61 @@ def sync_predictions_to_supabase(
     return pred_dicts
 
 
+def refresh_dashboard_cache_after_save() -> bool:
+    refresh_url = os.getenv(DASHBOARD_CACHE_REFRESH_URL_ENV)
+    refresh_secret = os.getenv(DASHBOARD_CACHE_REFRESH_SECRET_ENV)
+    if not refresh_url or not refresh_secret:
+        log.warning(
+            "Dashboard cache refresh skipped: %s/%s not configured",
+            DASHBOARD_CACHE_REFRESH_URL_ENV,
+            DASHBOARD_CACHE_REFRESH_SECRET_ENV,
+        )
+        return False
+
+    try:
+        res = requests.post(
+            refresh_url,
+            headers={"X-Internal-Secret": refresh_secret},
+            timeout=60,
+        )
+        if not res.ok:
+            body = (res.text or "")[:500]
+            log.warning(
+                "Dashboard cache refresh failed: status=%s body=%s",
+                res.status_code,
+                body,
+            )
+            return False
+        payload = res.json()
+        if not payload.get("ok"):
+            log.warning("Dashboard cache refresh returned failure: %s", payload)
+            return False
+        log.info(
+            "Dashboard cache refreshed: data_version=%s cache_status=%s",
+            payload.get("data_version"),
+            payload.get("cache_status"),
+        )
+        return True
+    except Exception as exc:
+        log.warning("Dashboard cache refresh request failed: %s", exc)
+        return False
+
+
+def sync_predictions_to_supabase_and_refresh(
+    pred_rows_or_conn: Any,
+    path_rows: list[tuple] | None = None,
+    peak_rows: list[tuple] | None = None,
+    observed_df: pd.DataFrame | None = None,
+):
+    pred_dicts = sync_predictions_to_supabase(
+        pred_rows_or_conn, path_rows, peak_rows, observed_df
+    )
+    if not pred_dicts:
+        return pred_dicts
+    refresh_dashboard_cache_after_save()
+    return pred_dicts
+
+
 def main():
     log.info("=" * 65)
     log.info("032_train_and_predict_box.py 시작")
@@ -304,10 +645,6 @@ def main():
         import duckdb
     except ImportError as e:
         raise ImportError("duckdb 패키지가 필요합니다. pip install duckdb") from e
-    try:
-        reset_predictions_supabase()
-    except ValueError:
-        log.warning("Supabase 설정이 없어 reset_predictions_supabase를 건너뜁니다.")
     conn = duckdb.connect(database=":memory:")
     setup_stage_db_for_supabase(conn)
     hydrate_stage_db_from_supabase(conn)
@@ -320,7 +657,6 @@ def main():
         log.warning(
             "학습 대상 박스가 없습니다. (coin_analysis_results is_prediction=0 비어있음)"
         )
-        sync_predictions_to_supabase(conn)
         conn.close()
         log.info("완료 — %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         return
@@ -341,7 +677,11 @@ def main():
     # log.info("      (임시) BTC만 사용 — %d개 박스", len(df_all))
 
     log.info("[2/7] 연속 박스 쌍 구성")
-    train_df = build_training_pairs(df_all)
+    train_source_df = df_all[
+        (df_all["is_prediction"].astype(int) == 0)
+        & (df_all["is_completed"].astype(int) == 1)
+    ].copy()
+    train_df = build_training_pairs(train_source_df)
     log.info("      연속 쌍 수: %d개", len(train_df))
 
     # BTC 박스 훈련 시 2021 + Current 사이클만 사용
@@ -455,7 +795,17 @@ def main():
         len(peak_rows),
     )
 
-    pred_dicts = sync_predictions_to_supabase(pred_rows, path_rows, peak_rows)
+    if not pred_rows:
+        log.warning(
+            "생성된 box scenario가 없어 Supabase publish를 건너뜁니다. 기존 예측을 보존합니다."
+        )
+        conn.close()
+        log.info("완료 — %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        return
+
+    pred_dicts = sync_predictions_to_supabase_and_refresh(
+        pred_rows, path_rows, peak_rows, df_all
+    )
 
     print_prediction_summary_rows(pred_dicts)
 

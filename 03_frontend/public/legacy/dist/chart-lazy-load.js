@@ -5,8 +5,6 @@ function getLoadState() {
             loadedCycles: new Set(),
             loadingCycles: new Map(),
             loadError: new Map(),
-            backgroundPreload: undefined,
-            preloadGeneration: 0,
         };
     }
     return win.__DASHBOARD_LOAD_STATE__;
@@ -42,7 +40,9 @@ export function getManifestCoins() {
 }
 export function findManifestCycle(coinId, cycleNumber) {
     const coin = findManifestCoin(coinId);
-    return (coin?.cycles?.find((cycle) => Number(cycle.cycle_number) === Number(cycleNumber)) || null);
+    return (coin?.cycles?.find((cycle) => Number(cycle.cycle_number) === Number(cycleNumber)) ||
+        findLoadedCycle(coinId, cycleNumber) ||
+        null);
 }
 export function getCycleDisplayName(coinId, cycleNumber) {
     const manifestCycle = findManifestCycle(coinId, cycleNumber);
@@ -73,8 +73,12 @@ export function initLoadStateFromInitial() {
     });
 }
 export function isCycleAvailable(coinId, cycleNumber) {
+    const manifest = getDashboardManifest();
     const manifestCycle = findManifestCycle(coinId, cycleNumber);
-    return Boolean(manifestCycle && manifestCycle.can_lazy_load !== false);
+    if (manifest?.coins?.length) {
+        return Boolean(manifestCycle && manifestCycle.can_lazy_load !== false);
+    }
+    return Boolean(findLoadedCycle(coinId, cycleNumber));
 }
 export function getCycleStatus(coinId, cycleNumber) {
     const key = cycleKey(coinId, cycleNumber);
@@ -114,8 +118,6 @@ async function reloadInitialSnapshot() {
     state.loadedCycles = new Set();
     state.loadingCycles = new Map();
     state.loadError = new Map();
-    state.backgroundPreload = undefined;
-    state.preloadGeneration += 1;
     initLoadStateFromInitial();
 }
 function mergeCycle(coinId, cycle) {
@@ -138,7 +140,16 @@ function mergeCycle(coinId, cycle) {
     else
         ALL_DATA[coinId].cycles.push(cycle);
 }
-export async function ensureCycleLoaded(coinId, cycleNumber, allowSnapshotReload = true) {
+function refreshDashboardView() {
+    const win = window;
+    if (typeof win.buildCycleToggles === 'function') {
+        win.buildCycleToggles();
+    }
+    if (typeof win.drawChart === 'function') {
+        win.drawChart();
+    }
+}
+export async function ensureCycleLoaded(coinId, cycleNumber, allowSnapshotReload = true, refreshView = true) {
     if (!isCycleAvailable(coinId, cycleNumber))
         return;
     const status = getCycleStatus(coinId, cycleNumber);
@@ -150,6 +161,7 @@ export async function ensureCycleLoaded(coinId, cycleNumber, allowSnapshotReload
     if (existing)
         return existing;
     const promise = (async () => {
+        let shouldRefreshView = false;
         try {
             const baseUrl = getApiBaseUrl();
             const params = new URLSearchParams({
@@ -165,105 +177,30 @@ export async function ensureCycleLoaded(coinId, cycleNumber, allowSnapshotReload
             if (currentVersion && payload.data_version !== currentVersion) {
                 await reloadInitialSnapshot();
                 if (allowSnapshotReload) {
-                    return ensureCycleLoaded(coinId, cycleNumber, false);
+                    return ensureCycleLoaded(coinId, cycleNumber, false, refreshView);
                 }
                 throw new Error('Dashboard data version changed. Please try again.');
             }
             mergeCycle(coinId, payload.cycle);
             state.loadedCycles.add(key);
             state.loadError.delete(key);
+            shouldRefreshView = true;
         }
         catch (error) {
             state.loadError.set(key, error instanceof Error ? error.message : String(error));
+            shouldRefreshView = true;
             throw error;
         }
         finally {
             state.loadingCycles.delete(key);
+            if (refreshView && shouldRefreshView) {
+                refreshDashboardView();
+            }
         }
     })();
     state.loadingCycles.set(key, promise);
     return promise;
 }
-function buildBackgroundPreloadQueue() {
-    const manifest = getDashboardManifest();
-    const defaultCoinId = String(manifest?.default_coin_id || '');
-    const defaultCycleNumber = Number(manifest?.default_cycle_number);
-    const targets = [];
-    getManifestCoins().forEach((coin) => {
-        const coinId = String(coin.coin_id || '');
-        if (!coinId)
-            return;
-        (coin.cycles || []).forEach((cycle) => {
-            const cycleNumber = Number(cycle.cycle_number);
-            if (!Number.isFinite(cycleNumber))
-                return;
-            if (cycle.can_lazy_load === false)
-                return;
-            const status = getCycleStatus(coinId, cycleNumber);
-            if (status === 'loaded' || status === 'empty' || status === 'loading')
-                return;
-            let priority = 10;
-            if (cycleNumber === defaultCycleNumber)
-                priority = 1;
-            if (coinId === defaultCoinId && cycleNumber === defaultCycleNumber)
-                priority = 0;
-            targets.push({ coinId, cycleNumber, priority });
-        });
-    });
-    return targets
-        .sort((a, b) => {
-        if (a.priority !== b.priority)
-            return a.priority - b.priority;
-        if (a.cycleNumber !== b.cycleNumber)
-            return b.cycleNumber - a.cycleNumber;
-        return a.coinId.localeCompare(b.coinId);
-    })
-        .map(({ coinId, cycleNumber }) => ({ coinId, cycleNumber }));
-}
-function wait(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-export function startBackgroundCyclePreload(concurrency = 2, gapMs = 120) {
-    const state = getLoadState();
-    if (state.backgroundPreload)
-        return state.backgroundPreload;
-    state.backgroundPreload = (async () => {
-        const generation = state.preloadGeneration;
-        const queue = buildBackgroundPreloadQueue();
-        let cursor = 0;
-        const workerCount = Math.max(1, Math.min(concurrency, queue.length));
-        async function worker() {
-            while (cursor < queue.length) {
-                if (state.preloadGeneration !== generation)
-                    return;
-                const target = queue[cursor++];
-                try {
-                    await ensureCycleLoaded(target.coinId, target.cycleNumber);
-                }
-                catch (error) {
-                    console.warn('[dashboard preload] cycle load failed', target.coinId, target.cycleNumber, error);
-                }
-                if (gapMs > 0)
-                    await wait(gapMs);
-            }
-        }
-        await Promise.all(Array.from({ length: workerCount }, () => worker()));
-    })();
-    return state.backgroundPreload;
-}
-export function scheduleBackgroundCyclePreload() {
-    const run = () => {
-        void startBackgroundCyclePreload();
-    };
-    const idle = window.requestIdleCallback;
-    if (typeof idle === 'function') {
-        idle(run, { timeout: 2500 });
-    }
-    else {
-        window.setTimeout(run, 1200);
-    }
-}
 window.ensureCycleLoaded = ensureCycleLoaded;
 window.getCycleStatus = getCycleStatus;
-window.startBackgroundCyclePreload = startBackgroundCyclePreload;
 initLoadStateFromInitial();

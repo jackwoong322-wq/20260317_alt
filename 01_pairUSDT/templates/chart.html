@@ -45,6 +45,9 @@
         <button class="cycle-btn" id="toggleExtendedForecast"
           style="border-color:#4a6080;color:#4a6080;"
           onclick="toggleExtendedForecast()">EXTENDED</button>
+        <button class="cycle-btn" id="toggleSubBox"
+          style="border-color:#00d4ff;color:#00d4ff;background:rgba(0,212,255,0.10)"
+          onclick="toggleSubBox()">SUB-BOX</button>
 
       </div>
     </div>
@@ -61,7 +64,7 @@
   </div>
 </div>
 
-<script>const ALL_DATA = __CHART_DATA__;</script>
+<script>var ALL_DATA = __CHART_DATA__; window.ALL_DATA = ALL_DATA;</script>
 <script type="module" src="dist/chart.js"></script>
 
 </body>
