@@ -286,14 +286,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                 result === 'PRED_BEAR_ACTIVE' || result === 'PRED_BULL_ACTIVE');
             const isActiveBear = result === 'BEAR_ACTIVE' || result === 'PRED_BEAR_ACTIVE';
             const prevBox = zones[zi - 1] || null;
-            const refHighForLow = isBear ? (prevBox ? prevBox.hi : 100) : z.hi;
-            const refLowForHigh = isBear
-                ? z.lo
-                : zi === firstBullZi && cycleLow != null
-                    ? cycleLow
-                    : prevBox
-                        ? prevBox.lo
-                        : 100;
+            const refHighForLow = prevBox ? prevBox.hi : 100;
+            const refLowForHigh = z.lo;
             let hiDay, loDay;
             if (isPrediction) {
                 const dur = z.endX - z.startX;
@@ -422,14 +416,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             const prevHighDay = prevBox ? findBoxExtremeDay(prevBox, 'high') : null;
             const prevLowDay = prevBox ? findBoxExtremeDay(prevBox, 'low') : null;
             const cycleLowDay = cycleData[cycleLowIdx]?.x ?? null;
-            const refLowDayForHigh = isBear
-                ? loDay
-                : zi === firstBullZi && cycleLow != null
-                    ? cycleLowDay
-                    : prevBox
-                        ? prevLowDay
-                        : 0;
-            const refHighDayForLow = isBear ? (prevBox ? prevHighDay : 0) : hiDay;
+            const refLowDayForHigh = loDay;
+            const refHighDayForLow = prevBox ? prevHighDay : 0;
             const hiVsPrevLo = refLowForHigh != null && refLowForHigh !== 0
                 ? (((hiVal - refLowForHigh) / refLowForHigh) * 100).toFixed(1)
                 : null;
@@ -482,7 +470,7 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             const lblHi = document.createElement('div');
             lblHi.className = 'bz-label' + (isPrediction ? ' prediction' : '');
             lblHi.style.color = hiLblColor;
-            const hiBoxNo = isPrediction && z.boxIndex != null ? z.boxIndex + 1 : zi + 1;
+            const hiBoxNo = zi + 1;
             const hiText = formatBoxLabel('H', hiBoxNo, hiVal, hiUsd, hiVsPrevLo, hiElapsedDays, isPrediction ? scenTag : '');
             lblHi.textContent = hiText;
             const startPxHi = timeScale.timeToCoordinate(dayToTime(z.startX));
@@ -530,7 +518,7 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             const lblLo = document.createElement('div');
             lblLo.className = 'bz-label' + (isPrediction ? ' prediction' : '');
             lblLo.style.color = loLblColor;
-            const loBoxNo = isPrediction && z.boxIndex != null ? z.boxIndex + 1 : zi + 1;
+            const loBoxNo = zi + 1;
             const loText = formatBoxLabel('L', loBoxNo, loVal, loUsd, loVsPrevHi, loElapsedDays);
             lblLo.textContent = loText;
             const startPxLo = timeScale.timeToCoordinate(dayToTime(z.startX));
@@ -617,18 +605,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                     const predBadge = isPrediction
                         ? ` <span style="color:${highRiskCaution ? '#ff4466' : '#00d4ff'};font-size:9px;opacity:0.8">[PREDICTION${highRiskCaution ? ' · CAUTION: BEAR TRANSITION' : ''}]</span>`
                         : '';
-                    const hiRefLabel = isBear
-                        ? '현재박스 저점대비'
-                        : zi === firstBullZi && cycleLow != null
-                            ? '최저점(CYCLE LOW)대비'
-                            : prevBox
-                                ? '직전 박스 저점대비'
-                                : '100%대비';
-                    const loRefLabel = isBear
-                        ? prevBox
-                            ? '직전 박스 고점대비'
-                            : '100%대비'
-                        : '현재 박스 고점대비';
+                    const hiRefLabel = '현재박스 저점대비';
+                    const loRefLabel = prevBox ? '직전 박스 고점대비' : '100%대비';
                     const hiElapsedText = hiElapsedDays == null ? '-' : hiElapsedDays + 'd';
                     const loElapsedText = loElapsedDays == null ? '-' : loElapsedDays + 'd';
                     tooltip.innerHTML =
@@ -637,7 +615,7 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                             '">' +
                             titleLabel +
                             ' #' +
-                            (z.boxIndex != null ? z.boxIndex + 1 : zi + 1) +
+                            (zi + 1) +
                             predBadge +
                             '</div>' +
                             '<div class="bt-row"><span class="bt-key">고점</span><span class="bt-val">' +
