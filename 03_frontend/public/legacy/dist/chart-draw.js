@@ -13,6 +13,7 @@ import { addBoxZoneSeries, addBoxZoneFallback, addActiveBoxExtensions } from './
 import { addPredictionPaths } from './chart-series-prediction.js';
 import { addBearBullSeries } from './chart-series-bearbull.js';
 import { addSubBoxSeries } from './chart-series-subbox.js';
+import { addBollingerBandsSeries } from './chart-series-bb.js';
 import { updateLegend, updateStats } from './chart-render-legend-stats.js';
 import { clearBearBullLabels, clearBoxMarks } from './chart-render-overlays.js';
 import { getCycleStatus } from './chart-lazy-load.js';
@@ -110,6 +111,9 @@ function drawCycleForCoin(state, coinId, coinData, coinIdx, cycle, legendItems) 
     addSubBoxSeries(coinId, coinData, cycle, cycleNum, lineSeries);
     addPredictionPaths(coinId, coinData, cycle, cycleNum);
     addBearBullSeries(coinId, coinData, cycle, cycleNum, lineSeries);
+    if (state.showBB) {
+        addBollingerBandsSeries(state, coinId, coinData.symbol, cycle.cycle_name, cycleNum, cycle.data, closeKey);
+    }
     legendItems.push({
         color,
         label: buildLegendLabel(state, coinData, cycle),
