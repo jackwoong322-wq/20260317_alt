@@ -14,6 +14,22 @@ import {
 
 declare const ALL_DATA: any;
 
+/** 매니페스트 + 이미 로드된 ALL_DATA에서 사이클 번호만 모음 (가짜 1~5 폴백 없음) */
+function collectCycleNumbersForCoin(coinId: string): Set<number> {
+  const nums = new Set<number>();
+  const manifestCoin = getManifestCoins().find((c: any) => c.coin_id === coinId);
+  for (const c of manifestCoin?.cycles || []) {
+    const n = Number(c.cycle_number);
+    if (Number.isFinite(n) && n > 0) nums.add(n);
+  }
+  const coinData = ALL_DATA?.[coinId];
+  for (const c of coinData?.cycles || []) {
+    const n = Number(c.cycle_number);
+    if (Number.isFinite(n) && n > 0) nums.add(n);
+  }
+  return nums;
+}
+
 // ── Coin List UI ──────────────────────────────────────
 export function buildCoinList(filter: string = ''): void {
   const el = document.getElementById('coinList');
@@ -95,20 +111,14 @@ export function buildCycleToggles(): void {
   el.innerHTML = '';
   const cycleNums = new Set<number>();
   chartState.selectedCoins.forEach((id: string) => {
-    const manifestCoin = getManifestCoins().find((coin: any) => coin.coin_id === id);
-    (manifestCoin?.cycles || []).forEach((c: any) =>
-      cycleNums.add(Number(c.cycle_number) as number),
-    );
+    collectCycleNumbersForCoin(id).forEach((n) => cycleNums.add(n));
   });
-  if (cycleNums.size === 0) {
-    [1, 2, 3, 4, 5].forEach((n) => cycleNums.add(n));
-  }
   // activeCycles 에 현재 표시 가능한 사이클이 하나도 없으면
   // 가장 최신 사이클(최대 cycle 번호)을 기본 선택으로 설정
   const hasActiveInView = Array.from(cycleNums).some((n) =>
     chartState.activeCycles.has(n),
   );
-  if (!hasActiveInView) {
+  if (cycleNums.size > 0 && !hasActiveInView) {
     const maxCycle = Math.max(...Array.from(cycleNums));
     chartState.activeCycles = new Set([maxCycle]);
   }
@@ -121,9 +131,6 @@ export function buildCycleToggles(): void {
         name = getCycleDisplayName(id, n).toUpperCase();
         break;
       }
-    }
-    if (cycleNums.size === 0 || chartState.selectedCoins.length === 0) {
-      name = n === 5 ? 'CURRENT' : `CYCLE ${n}`;
     }
     const btn = document.createElement('button');
     btn.className = 'cycle-btn';
