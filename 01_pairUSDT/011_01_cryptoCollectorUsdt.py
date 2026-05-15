@@ -22,10 +22,10 @@ load_dotenv(_SCRIPT_DIR / ".env", override=False)
 
 BINANCE_QUOTE = "USDT"
 TARGET_COIN = {
-    "id": "zcash",
-    "symbol": "ZEC",
-    "name": "Zcash",
-    "rank": 999,
+    "id": "ondo",
+    "symbol": "ONDO",
+    "name": "Ondo",
+    "rank": 998,
 }
 
 logging.basicConfig(
