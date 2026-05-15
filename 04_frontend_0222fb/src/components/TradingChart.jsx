@@ -71,6 +71,27 @@ function calculateMACD(data) {
   return { macdLine, signal, histogram }
 }
 
+function calculateBollingerBands(data, period = 20, stdDevMultiplier = 2) {
+  const sma = calculateMA(data, period);
+  const bb = [];
+  for (let i = period - 1; i < data.length; i++) {
+    const currentSma = sma[i - (period - 1)].value;
+    let sumSquares = 0;
+    for (let j = 0; j < period; j++) {
+      const val = data[i - j].close;
+      sumSquares += Math.pow(val - currentSma, 2);
+    }
+    const stdDev = Math.sqrt(sumSquares / period);
+    bb.push({
+      time: data[i].time,
+      middle: currentSma,
+      upper: currentSma + (stdDev * stdDevMultiplier),
+      lower: currentSma - (stdDev * stdDevMultiplier)
+    });
+  }
+  return bb;
+}
+
 const BASE_CHART_OPTIONS = {
   layout: {
     background: { color: CHART_THEME.background },
@@ -115,6 +136,7 @@ const MA_TOGGLES = [
   { key: 'ma20', label: 'MA20', tone: 'gold' },
   { key: 'ma50', label: 'MA50', tone: 'steel' },
   { key: 'ma200', label: 'MA200', tone: 'violet' },
+  { key: 'bb20', label: 'BB (20,2)', tone: 'accent' },
 ]
 
 export default function TradingChart() {
@@ -128,7 +150,7 @@ export default function TradingChart() {
   const rsiChartRef = useRef(null)
   const macdChartRef = useRef(null)
 
-  const [showMA, setShowMA] = useState({ ma20: true, ma50: true, ma200: true })
+  const [showMA, setShowMA] = useState({ ma20: true, ma50: true, ma200: true, bb20: false })
   const [currentPrice, setCurrentPrice] = useState(null)
   const [priceChange, setPriceChange] = useState(null)
   const [chartData, setChartData] = useState(null)
@@ -174,6 +196,7 @@ export default function TradingChart() {
           ma50: calculateMA(candleData, 50),
           ma200: calculateMA(candleData, 200),
         },
+        bbData: calculateBollingerBands(candleData, 20, 2),
         rsiData: calculateRSI(candleData),
         macdData: calculateMACD(candleData),
       })
@@ -239,6 +262,16 @@ export default function TradingChart() {
       if (showMA.ma200) {
         const series = mainChart.addLineSeries({ color: '#b691ff', lineWidth: 2, title: 'MA200' })
         series.setData(chartData.maData.ma200)
+      }
+      if (showMA.bb20 && chartData.bbData) {
+        const upperSeries = mainChart.addLineSeries({ color: 'rgba(167, 139, 250, 0.4)', lineWidth: 1, lineStyle: 2, title: 'BB Upper' });
+        upperSeries.setData(chartData.bbData.map(d => ({ time: d.time, value: d.upper })));
+        
+        const lowerSeries = mainChart.addLineSeries({ color: 'rgba(167, 139, 250, 0.4)', lineWidth: 1, lineStyle: 2, title: 'BB Lower' });
+        lowerSeries.setData(chartData.bbData.map(d => ({ time: d.time, value: d.lower })));
+        
+        const middleSeries = mainChart.addLineSeries({ color: 'rgba(167, 139, 250, 0.8)', lineWidth: 1, title: 'BB Middle' });
+        middleSeries.setData(chartData.bbData.map(d => ({ time: d.time, value: d.middle })));
       }
       mainChart.timeScale().fitContent()
 
