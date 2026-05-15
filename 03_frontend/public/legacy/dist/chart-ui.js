@@ -90,7 +90,7 @@ function clearAll() {
 }
 // ── Cycle Toggles UI ──────────────────────────────────
 export function buildCycleToggles() {
-    const el = document.getElementById('cycleToggles');
+    const el = document.getElementById('menuCycles');
     if (!el)
         return;
     el.innerHTML = '';
@@ -115,8 +115,8 @@ export function buildCycleToggles() {
                 break;
             }
         }
-        const btn = document.createElement('button');
-        btn.className = 'cycle-btn';
+        const label = document.createElement('label');
+        label.className = 'dropdown-item';
         const active = chartState.activeCycles.has(n);
         const statuses = chartState.selectedCoins.map((coinId) => ({
             available: isCycleAvailable(coinId, n),
@@ -127,120 +127,112 @@ export function buildCycleToggles() {
         const hasError = statuses.some((item) => item.status === 'error');
         const allEmpty = statuses.length > 0 &&
             statuses.every((item) => !item.available || item.status === 'empty');
-        const allLoaded = statuses.length > 0 &&
-            statuses.every((item) => !item.available ||
-                item.status === 'loaded' ||
-                item.status === 'empty');
-        btn.style.cssText = active
-            ? `border-color:${col.main};color:${col.main};background:${col.band}`
-            : 'border-color:#1e2d45;color:#4a6080;background:transparent';
-        if (hasUnavailable) {
-            btn.style.opacity = '0.45';
-        }
-        if (hasError) {
-            btn.style.borderColor = '#ff4466';
-            btn.style.color = '#ff92aa';
-        }
-        else if (hasLoading) {
-            btn.style.borderColor = '#FFB800';
-            btn.style.color = '#FFB800';
-        }
-        else if (allEmpty) {
-            btn.style.borderColor = '#4a6080';
-            btn.style.color = '#6882a7';
-        }
-        else if (allLoaded && !active) {
-            btn.style.borderColor = '#2d4a68';
-        }
-        btn.textContent = hasLoading
-            ? `${name} LOADING`
-            : hasError
-                ? `${name} ERROR`
-                : allEmpty
-                    ? `${name} EMPTY`
-                    : name;
-        btn.onclick = () => {
-            if (chartState.activeCycles.has(n))
-                chartState.activeCycles.delete(n);
-            else
+        let textStr = name;
+        if (hasLoading)
+            textStr = `${name} LOADING`;
+        else if (hasError)
+            textStr = `${name} ERROR`;
+        else if (allEmpty)
+            textStr = `${name} EMPTY`;
+        label.innerHTML = `<input type="checkbox" ${active ? 'checked' : ''} ${hasUnavailable ? 'disabled' : ''}> <span style="color:${col.main}">■</span> <span style="flex:1">${textStr}</span>`;
+        label.querySelector('input').onchange = (e) => {
+            if (e.target.checked)
                 chartState.activeCycles.add(n);
+            else
+                chartState.activeCycles.delete(n);
             void loadActiveCyclesForSelection();
         };
-        el.appendChild(btn);
+        el.appendChild(label);
     });
+    const badge = document.getElementById('badgeCycles');
+    if (badge)
+        badge.textContent = String(chartState.activeCycles.size);
 }
 window.buildCycleToggles = buildCycleToggles;
+function updateShowBadge() {
+    const activeCount = [
+        chartState.showHighLow,
+        chartState.showBoxZone,
+        chartState.showPrediction,
+        chartState.showExtendedForecast,
+        chartState.showSubBox,
+        chartState.showBB
+    ].filter(Boolean).length;
+    const badge = document.getElementById('badgeShow');
+    if (badge)
+        badge.textContent = String(activeCount);
+}
+function syncCheckbox(id, checked) {
+    const chk = document.getElementById(id);
+    if (chk)
+        chk.checked = checked;
+}
 function toggleHighLow() {
-    chartState.showHighLow = !chartState.showHighLow;
-    const btn = document.getElementById('toggleRange');
-    if (btn) {
-        btn.style.cssText = chartState.showHighLow
-            ? 'border-color:#00d4ff;color:#00d4ff;background:rgba(0,212,255,0.1)'
-            : 'border-color:#4a6080;color:#4a6080;';
-    }
+    const chk = document.getElementById('chkHighLow');
+    if (chk)
+        chartState.showHighLow = chk.checked;
+    else
+        chartState.showHighLow = !chartState.showHighLow;
+    updateShowBadge();
     drawChart();
 }
 function toggleBoxZone() {
-    chartState.showBoxZone = !chartState.showBoxZone;
-    const btn = document.getElementById('toggleBox');
-    if (btn) {
-        btn.style.cssText = chartState.showBoxZone
-            ? 'border-color:#FFB800;color:#FFB800;background:rgba(255,184,0,0.1)'
-            : 'border-color:#4a6080;color:#4a6080;';
-    }
+    const chk = document.getElementById('chkBoxZone');
+    if (chk)
+        chartState.showBoxZone = chk.checked;
+    else
+        chartState.showBoxZone = !chartState.showBoxZone;
+    updateShowBadge();
     drawChart();
 }
 function toggleBearBull() {
-    chartState.showPrediction = !chartState.showPrediction;
+    const chk = document.getElementById('chkBearBull');
+    if (chk)
+        chartState.showPrediction = chk.checked;
+    else
+        chartState.showPrediction = !chartState.showPrediction;
     if (!chartState.showPrediction) {
         chartState.showExtendedForecast = false;
-    }
-    const btn = document.getElementById('toggleBearBull');
-    if (btn) {
-        btn.style.cssText = chartState.showPrediction
-            ? 'border-color:#ff6bb5;color:#ff6bb5;background:rgba(255,107,181,0.1)'
-            : 'border-color:#4a6080;color:#4a6080;';
+        syncCheckbox('chkExtendedForecast', false);
     }
     updateExtendedForecastButton();
+    updateShowBadge();
     drawChart();
 }
 function updateExtendedForecastButton() {
-    const btn = document.getElementById('toggleExtendedForecast');
-    if (!btn)
+    const chk = document.getElementById('chkExtendedForecast');
+    if (!chk)
         return;
-    btn.disabled = !chartState.showPrediction;
-    btn.style.cssText =
-        chartState.showPrediction && chartState.showExtendedForecast
-            ? 'border-color:#a78bfa;color:#d8ccff;background:rgba(167,139,250,0.12)'
-            : chartState.showPrediction
-                ? 'border-color:#4a6080;color:#4a6080;'
-                : 'border-color:#26364f;color:#344966;opacity:0.55;';
+    chk.disabled = !chartState.showPrediction;
 }
 function toggleExtendedForecast() {
     if (!chartState.showPrediction)
         return;
-    chartState.showExtendedForecast = !chartState.showExtendedForecast;
+    const chk = document.getElementById('chkExtendedForecast');
+    if (chk)
+        chartState.showExtendedForecast = chk.checked;
+    else
+        chartState.showExtendedForecast = !chartState.showExtendedForecast;
     updateExtendedForecastButton();
+    updateShowBadge();
     drawChart();
 }
 function toggleSubBox() {
-    chartState.showSubBox = !chartState.showSubBox;
-    const btn = document.getElementById('toggleSubBox');
-    if (btn) {
-        btn.style.cssText = chartState.showSubBox
-            ? 'border-color:#00d4ff;color:#00d4ff;background:rgba(0,212,255,0.10)'
-            : 'border-color:#4a6080;color:#4a6080;';
-    }
+    const chk = document.getElementById('chkSubBox');
+    if (chk)
+        chartState.showSubBox = chk.checked;
+    else
+        chartState.showSubBox = !chartState.showSubBox;
+    updateShowBadge();
     drawChart();
 }
 function toggleBB() {
-    chartState.showBB = !chartState.showBB;
-    const btn = document.getElementById('toggleBB');
-    if (btn) {
-        btn.style.cssText = chartState.showBB
-            ? 'border-color:#a78bfa;color:#d8ccff;background:rgba(167,139,250,0.12)'
-            : 'border-color:#4a6080;color:#4a6080;';
-    }
+    const chk = document.getElementById('chkBB');
+    if (chk)
+        chartState.showBB = chk.checked;
+    else
+        chartState.showBB = !chartState.showBB;
+    updateShowBadge();
     drawChart();
 }
 // ── Defaults & Bottom Override UI ─────────────────────
@@ -266,31 +258,14 @@ export function initDefaults() {
         }
     }
     // BOX ZONE 기본 활성화 버튼 스타일 동기화
-    const boxBtn = document.getElementById('toggleBox');
-    if (boxBtn) {
-        boxBtn.style.cssText = chartState.showBoxZone
-            ? 'border-color:#FFB800;color:#FFB800;background:rgba(255,184,0,0.1)'
-            : 'border-color:#4a6080;color:#4a6080;';
-    }
-    const predictionBtn = document.getElementById('toggleBearBull');
-    if (predictionBtn) {
-        predictionBtn.style.cssText = chartState.showPrediction
-            ? 'border-color:#ff6bb5;color:#ff6bb5;background:rgba(255,107,181,0.1)'
-            : 'border-color:#4a6080;color:#4a6080;';
-    }
+    syncCheckbox('chkHighLow', chartState.showHighLow);
+    syncCheckbox('chkBoxZone', chartState.showBoxZone);
+    syncCheckbox('chkBearBull', chartState.showPrediction);
+    syncCheckbox('chkSubBox', chartState.showSubBox);
+    syncCheckbox('chkBB', chartState.showBB);
     updateExtendedForecastButton();
-    const subBoxBtn = document.getElementById('toggleSubBox');
-    if (subBoxBtn) {
-        subBoxBtn.style.cssText = chartState.showSubBox
-            ? 'border-color:#00d4ff;color:#00d4ff;background:rgba(0,212,255,0.10)'
-            : 'border-color:#4a6080;color:#4a6080;';
-    }
-    const bbBtn = document.getElementById('toggleBB');
-    if (bbBtn) {
-        bbBtn.style.cssText = chartState.showBB
-            ? 'border-color:#a78bfa;color:#d8ccff;background:rgba(167,139,250,0.12)'
-            : 'border-color:#4a6080;color:#4a6080;';
-    }
+    syncCheckbox('chkExtendedForecast', chartState.showExtendedForecast);
+    updateShowBadge();
 }
 // ── Wire DOM events & expose toggles for onclick ───────
 const searchInput = document.getElementById('searchInput');
@@ -306,3 +281,20 @@ window.toggleBearBull = toggleBearBull;
 window.toggleExtendedForecast = toggleExtendedForecast;
 window.toggleSubBox = toggleSubBox;
 window.toggleBB = toggleBB;
+function toggleDropdown(id) {
+    const menu = document.getElementById(id);
+    if (!menu)
+        return;
+    const isVisible = menu.style.display !== 'none';
+    document.querySelectorAll('.dropdown-menu').forEach((el) => el.style.display = 'none');
+    if (!isVisible) {
+        menu.style.display = 'flex';
+    }
+}
+window.toggleDropdown = toggleDropdown;
+document.addEventListener('click', (e) => {
+    const target = e.target;
+    if (!target.closest('.dropdown')) {
+        document.querySelectorAll('.dropdown-menu').forEach((el) => el.style.display = 'none');
+    }
+});

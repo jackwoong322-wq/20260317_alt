@@ -24,16 +24,38 @@
 
   <main class="main">
     <div class="chart-toolbar">
-      <span class="toolbar-label">CYCLES:</span>
-      <div class="cycle-toggles" id="cycleToggles"></div>
+      <div class="dropdown" id="cyclesDropdown">
+        <button class="dropdown-toggle" id="btnCyclesDropdown" onclick="toggleDropdown('menuCycles')">
+          CYCLES <span class="dropdown-badge" id="badgeCycles">0</span> ▾
+        </button>
+        <div class="dropdown-menu" id="menuCycles" style="display:none;"></div>
+      </div>
       <div class="toolbar-actions">
-        <span class="toolbar-label">SHOW:</span>
-        <button class="cycle-btn" id="toggleRange" onclick="toggleHighLow()">HIGH/LOW</button>
-        <button class="cycle-btn" id="toggleBox" onclick="toggleBoxZone()">BOX ZONE</button>
-        <button class="cycle-btn" id="toggleBearBull" onclick="toggleBearBull()">PREDICT</button>
-        <button class="cycle-btn" id="toggleExtendedForecast" onclick="toggleExtendedForecast()">EXTENDED</button>
-        <button class="cycle-btn" id="toggleSubBox" onclick="toggleSubBox()">SUB-BOX</button>
-        <button class="cycle-btn" id="toggleBB" style="border-color:#4a6080;color:#4a6080;" onclick="toggleBB()">BB (20,2)</button>
+        <div class="dropdown" id="showDropdown">
+          <button class="dropdown-toggle" id="btnShowDropdown" onclick="toggleDropdown('menuShow')">
+            SHOW <span class="dropdown-badge" id="badgeShow">0</span> ▾
+          </button>
+          <div class="dropdown-menu right" id="menuShow" style="display:none;">
+            <label class="dropdown-item">
+              <input type="checkbox" id="chkHighLow" onchange="toggleHighLow()"> HIGH/LOW
+            </label>
+            <label class="dropdown-item">
+              <input type="checkbox" id="chkBoxZone" onchange="toggleBoxZone()"> BOX ZONE
+            </label>
+            <label class="dropdown-item">
+              <input type="checkbox" id="chkBearBull" onchange="toggleBearBull()"> PREDICT
+            </label>
+            <label class="dropdown-item">
+              <input type="checkbox" id="chkExtendedForecast" onchange="toggleExtendedForecast()"> EXTENDED
+            </label>
+            <label class="dropdown-item">
+              <input type="checkbox" id="chkSubBox" onchange="toggleSubBox()"> SUB-BOX
+            </label>
+            <label class="dropdown-item">
+              <input type="checkbox" id="chkBB" onchange="toggleBB()"> BB (20,2)
+            </label>
+          </div>
+        </div>
       </div>
     </div>
 

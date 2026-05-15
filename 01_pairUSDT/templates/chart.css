@@ -212,6 +212,75 @@
     letter-spacing: 0.5px;
   }
 
+  /* ── Dropdowns (Combo boxes) ── */
+  .dropdown {
+    position: relative;
+    display: inline-block;
+  }
+  .dropdown-toggle {
+    padding: 6px 14px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dropdown-toggle:hover {
+    border-color: var(--accent);
+  }
+  .dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    background: rgba(8,12,20,0.95);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    min-width: 160px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+    display: flex;
+    flex-direction: column;
+    padding: 6px 0;
+  }
+  .dropdown-menu.right {
+    left: auto;
+    right: 0;
+  }
+  .dropdown-item {
+    padding: 8px 16px;
+    font-size: 10px;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s;
+  }
+  .dropdown-item:hover {
+    background: rgba(255,255,255,0.05);
+  }
+  .dropdown-item input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: var(--accent);
+  }
+  .dropdown-badge {
+    background: rgba(0,212,255,0.15);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 9px;
+    font-weight: bold;
+  }
+
   .subbox-bracket {
     position: absolute;
     height: 8px;
