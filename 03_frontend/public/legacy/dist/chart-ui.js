@@ -1,8 +1,11 @@
-// UI interactions: coin select, cycle select, show select
+// chart-ui.js — 커스텀 드롭다운 (이슈 #101: 방향 B)
 import { chartState } from './chart-logic.js';
 import { CYCLE_COLORS } from './chart-logic.js';
 import { drawChart } from './chart-draw.js';
-import { ensureCycleLoaded, findManifestCycle, getDashboardManifest, getCycleDisplayName, getCycleStatus, getManifestCoins, isCycleAvailable, } from './chart-lazy-load.js';
+import { ensureCycleLoaded, findManifestCycle, getDashboardManifest, getCycleDisplayName,
+         getCycleStatus, getManifestCoins, isCycleAvailable } from './chart-lazy-load.js';
+
+// ── 공통 유틸 ─────────────────────────────────────────
 
 /** 매니페스트 + ALL_DATA에서 사이클 번호 수집 */
 function collectCycleNumbersForCoin(coinId) {
@@ -20,36 +23,101 @@ function collectCycleNumbersForCoin(coinId) {
     return nums;
 }
 
-// ── Coin Select UI ────────────────────────────────────
+/**
+ * 커스텀 드롭다운 패널 열기/닫기 관리
+ * 하나가 열리면 나머지는 닫힘
+ */
+function initDropdownToggle(triggerId, panelId) {
+    const trigger = document.getElementById(triggerId);
+    const panel   = document.getElementById(panelId);
+    if (!trigger || !panel || trigger.dataset.wired) return;
+    trigger.dataset.wired = '1';
+
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = panel.classList.contains('open');
+        // 모든 패널 닫기
+        document.querySelectorAll('.dropdown-panel.open')
+                .forEach((p) => p.classList.remove('open'));
+        document.querySelectorAll('.dropdown-trigger.active')
+                .forEach((t) => t.classList.remove('active'));
+        if (!isOpen) {
+            panel.classList.add('open');
+            trigger.classList.add('active');
+        }
+    });
+}
+
+/** 외부 클릭 시 모든 드롭다운 닫기 (최초 1회 등록) */
+if (!window.__dropdownOutsideWired) {
+    window.__dropdownOutsideWired = true;
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.dropdown-panel.open')
+                .forEach((p) => p.classList.remove('open'));
+        document.querySelectorAll('.dropdown-trigger.active')
+                .forEach((t) => t.classList.remove('active'));
+    });
+}
+
+/** trigger 버튼 레이블 업데이트 */
+function updateTriggerLabel(triggerId, items, emptyText = 'None') {
+    const trigger = document.getElementById(triggerId);
+    if (!trigger) return;
+    const label = trigger.querySelector('.trigger-label');
+    if (!label) return;
+    label.textContent = items.length === 0 ? emptyText
+                      : items.length <= 3  ? items.join(', ')
+                      : `${items[0]}, ${items[1]} +${items.length - 2}`;
+}
+
+// ── COIN 드롭다운 ──────────────────────────────────────
+
 export function buildCoinList(_filter = '') {
-    const select = document.getElementById('coinSelect');
-    if (!select) return;
+    const panel = document.getElementById('coinPanel');
+    if (!panel) return;
 
     const coins = getManifestCoins();
-    const currentVal = chartState.selectedCoins[0] || '';
+    panel.innerHTML = '';
 
-    select.innerHTML = '';
     coins.forEach((d) => {
-        const opt = document.createElement('option');
-        opt.value = d.coin_id;
-        opt.textContent = `${d.symbol}  ${d.name}`;
-        if (d.coin_id === currentVal) opt.selected = true;
-        select.appendChild(opt);
+        const isSelected = chartState.selectedCoins.includes(d.coin_id);
+        const item = document.createElement('div');
+        item.className = 'dropdown-item' + (isSelected ? ' selected' : '');
+        item.dataset.id = d.coin_id;
+        item.innerHTML = `
+          <div class="dropdown-check">${isSelected ? '<svg width="9" height="9" viewBox="0 0 9 9"><polyline points="1,5 3.5,7.5 8,2" fill="none" stroke="#080c14" stroke-width="1.8"/></svg>' : ''}</div>
+          <span class="di-symbol">${d.symbol}</span>
+          <span class="di-name">${d.name}</span>
+        `;
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = chartState.selectedCoins.indexOf(d.coin_id);
+            if (idx >= 0) {
+                // 마지막 코인은 해제 불가
+                if (chartState.selectedCoins.length === 1) return;
+                chartState.selectedCoins.splice(idx, 1);
+            } else {
+                chartState.selectedCoins.push(d.coin_id);
+            }
+            buildCoinList();
+            void loadActiveCyclesForSelection();
+        });
+        panel.appendChild(item);
     });
 
-    // 처음 빌드 시 onChange 등록 (중복 방지)
-    if (!select.dataset.wired) {
-        select.dataset.wired = '1';
-        select.onchange = () => {
-            const selected = Array.from(select.selectedOptions).map((o) => o.value);
-            // 최소 1개 선택 유지
-            chartState.selectedCoins = selected.length > 0 ? selected : chartState.selectedCoins;
-            void loadActiveCyclesForSelection();
-        };
-    }
-    // size 자동 조정 (최대 8)
-    select.size = Math.min(coins.length || 1, 8);
+    // 트리거 레이블 업데이트
+    updateTriggerLabel('coinTrigger',
+        chartState.selectedCoins.map((id) => {
+            const c = coins.find((x) => x.coin_id === id);
+            return c?.symbol ?? id;
+        })
+    );
+
+    // 드롭다운 토글 초기화 (1회)
+    initDropdownToggle('coinTrigger', 'coinPanel');
 }
+
+// ── CYCLE 드롭다운 ─────────────────────────────────────
 
 async function loadActiveCyclesForSelection() {
     const tasks = [];
@@ -66,10 +134,9 @@ async function loadActiveCyclesForSelection() {
     drawChart();
 }
 
-// ── Cycle Select UI ────────────────────────────────────
 export function buildCycleToggles() {
-    const select = document.getElementById('cycleSelect');
-    if (!select) return;
+    const panel = document.getElementById('cyclePanel');
+    if (!panel) return;
 
     const cycleNums = new Set();
     chartState.selectedCoins.forEach((id) => {
@@ -83,16 +150,12 @@ export function buildCycleToggles() {
         chartState.activeCycles = new Set([maxCycle]);
     }
 
-    // 현재 선택 상태 보존 후 재빌드
-    select.innerHTML = '';
+    panel.innerHTML = '';
     [...cycleNums].sort().forEach((n) => {
         let name = `CYCLE ${n}`;
         for (const id of chartState.selectedCoins) {
             const found = findManifestCycle(id, n);
-            if (found) {
-                name = getCycleDisplayName(id, n).toUpperCase();
-                break;
-            }
+            if (found) { name = getCycleDisplayName(id, n).toUpperCase(); break; }
         }
 
         const statuses = chartState.selectedCoins.map((coinId) => ({
@@ -107,67 +170,109 @@ export function buildCycleToggles() {
                     : hasError   ? `${name} ✕`
                     : allEmpty   ? `${name} —`
                     : name;
+        const col = CYCLE_COLORS[n] || CYCLE_COLORS[1];
+        const isSelected = chartState.activeCycles.has(n);
 
-        const opt = document.createElement('option');
-        opt.value = String(n);
-        opt.textContent = label;
-        opt.selected = chartState.activeCycles.has(n);
-        select.appendChild(opt);
+        const item = document.createElement('div');
+        item.className = 'dropdown-item' + (isSelected ? ' selected' : '');
+        item.innerHTML = `
+          <div class="dropdown-check">${isSelected ? '<svg width="9" height="9" viewBox="0 0 9 9"><polyline points="1,5 3.5,7.5 8,2" fill="none" stroke="#080c14" stroke-width="1.8"/></svg>' : ''}</div>
+          <span class="di-symbol" style="color:${col.main}">${label}</span>
+        `;
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (chartState.activeCycles.has(n)) {
+                if (chartState.activeCycles.size === 1) return; // 마지막 사이클 해제 불가
+                chartState.activeCycles.delete(n);
+            } else {
+                chartState.activeCycles.add(n);
+            }
+            void loadActiveCyclesForSelection();
+        });
+        panel.appendChild(item);
     });
 
-    // 표시 크기 자동 조정 (최대 5)
-    select.size = Math.min(cycleNums.size || 1, 5);
+    // 트리거 레이블 업데이트
+    updateTriggerLabel('cycleTrigger',
+        [...chartState.activeCycles].sort().map((n) => {
+            let name = `C${n}`;
+            for (const id of chartState.selectedCoins) {
+                const found = findManifestCycle(id, n);
+                if (found) { name = getCycleDisplayName(id, n); break; }
+            }
+            return name;
+        })
+    );
 
-    // onChange 등록 (중복 방지)
-    if (!select.dataset.wired) {
-        select.dataset.wired = '1';
-        select.onchange = () => {
-            chartState.activeCycles = new Set(
-                Array.from(select.selectedOptions).map((o) => Number(o.value))
-            );
-            void loadActiveCyclesForSelection();
-        };
-    }
+    initDropdownToggle('cycleTrigger', 'cyclePanel');
 }
 window.buildCycleToggles = buildCycleToggles;
 
-// ── Show Select UI ─────────────────────────────────────
-function syncShowSelect() {
-    const select = document.getElementById('showSelect');
-    if (!select) return;
-    for (const opt of select.options) {
-        switch (opt.value) {
-            case 'highlow':  opt.selected = chartState.showHighLow;           break;
-            case 'boxzone':  opt.selected = chartState.showBoxZone;            break;
-            case 'predict':  opt.selected = chartState.showPrediction;         break;
-            case 'extended': opt.selected = chartState.showExtendedForecast;   break;
-            case 'subbox':   opt.selected = chartState.showSubBox;             break;
-            case 'bb':       opt.selected = chartState.showBB;                 break;
-        }
-    }
+// ── SHOW 드롭다운 ──────────────────────────────────────
+
+const SHOW_OPTIONS = [
+    { value: 'highlow',  label: 'HIGH / LOW',   key: 'showHighLow' },
+    { value: 'boxzone',  label: 'BOX ZONE',      key: 'showBoxZone' },
+    { value: 'predict',  label: 'PREDICT',       key: 'showPrediction' },
+    { value: 'extended', label: 'EXTENDED',      key: 'showExtendedForecast' },
+    { value: 'subbox',   label: 'SUB-BOX',       key: 'showSubBox' },
+    { value: 'bb',       label: 'BB (20,2)',      key: 'showBB' },
+];
+
+function buildShowDropdown() {
+    const panel = document.getElementById('showPanel');
+    if (!panel || panel.dataset.built) return;
+    panel.dataset.built = '1';
+
+    SHOW_OPTIONS.forEach((opt) => {
+        const item = document.createElement('div');
+        const isSelected = !!chartState[opt.key];
+        item.className = 'dropdown-item' + (isSelected ? ' selected' : '');
+        item.dataset.val = opt.value;
+        item.innerHTML = `
+          <div class="dropdown-check">${isSelected ? '<svg width="9" height="9" viewBox="0 0 9 9"><polyline points="1,5 3.5,7.5 8,2" fill="none" stroke="#080c14" stroke-width="1.8"/></svg>' : ''}</div>
+          <span class="di-symbol">${opt.label}</span>
+        `;
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // EXTENDED는 PREDICT가 켜져 있어야 함
+            if (opt.value === 'extended' && !chartState.showPrediction) return;
+            chartState[opt.key] = !chartState[opt.key];
+            if (!chartState.showPrediction) chartState.showExtendedForecast = false;
+            syncShowDropdown();
+            drawChart();
+        });
+        panel.appendChild(item);
+    });
+
+    initDropdownToggle('showTrigger', 'showPanel');
+    syncShowDropdown();
 }
 
-function initShowSelect() {
-    const select = document.getElementById('showSelect');
-    if (!select || select.dataset.wired) return;
-    select.dataset.wired = '1';
+function syncShowDropdown() {
+    const panel = document.getElementById('showPanel');
+    if (!panel) return;
 
-    // 초기 상태 동기화
-    syncShowSelect();
+    SHOW_OPTIONS.forEach((opt) => {
+        const item = panel.querySelector(`[data-val="${opt.value}"]`);
+        if (!item) return;
+        const isSelected = !!chartState[opt.key];
+        item.className = 'dropdown-item' + (isSelected ? ' selected' : '');
+        const check = item.querySelector('.dropdown-check');
+        if (check) {
+            check.innerHTML = isSelected
+                ? '<svg width="9" height="9" viewBox="0 0 9 9"><polyline points="1,5 3.5,7.5 8,2" fill="none" stroke="#080c14" stroke-width="1.8"/></svg>'
+                : '';
+        }
+        // EXTENDED는 PREDICT 꺼지면 dim
+        if (opt.value === 'extended') {
+            item.style.opacity = chartState.showPrediction ? '1' : '0.35';
+        }
+    });
 
-    select.onchange = () => {
-        const vals = new Set(Array.from(select.selectedOptions).map((o) => o.value));
-        chartState.showHighLow          = vals.has('highlow');
-        chartState.showBoxZone          = vals.has('boxzone');
-        chartState.showPrediction       = vals.has('predict');
-        chartState.showExtendedForecast = vals.has('extended') && vals.has('predict');
-        chartState.showSubBox           = vals.has('subbox');
-        chartState.showBB               = vals.has('bb');
-        drawChart();
-    };
-
-    // CYCLES select size: 옵션 수에 맞게
-    select.size = select.options.length;
+    // 트리거 레이블
+    const active = SHOW_OPTIONS.filter((o) => chartState[o.key]).map((o) => o.label);
+    updateTriggerLabel('showTrigger', active, 'None');
 }
 
 // ── Defaults ─────────────────────────────────────────
@@ -189,17 +294,16 @@ export function initDefaults() {
             chartState.activeCycles = new Set([maxCycle]);
         }
     }
-
-    initShowSelect();
+    buildShowDropdown();
 }
 
-// ── Legacy toggle functions (공존용 — showSelect onChange가 주 경로) ──
-function toggleHighLow()          { chartState.showHighLow          = !chartState.showHighLow;          syncShowSelect(); drawChart(); }
-function toggleBoxZone()          { chartState.showBoxZone          = !chartState.showBoxZone;          syncShowSelect(); drawChart(); }
-function toggleBearBull()         { chartState.showPrediction       = !chartState.showPrediction;       syncShowSelect(); drawChart(); }
-function toggleExtendedForecast() { if (!chartState.showPrediction) return; chartState.showExtendedForecast = !chartState.showExtendedForecast; syncShowSelect(); drawChart(); }
-function toggleSubBox()           { chartState.showSubBox           = !chartState.showSubBox;           syncShowSelect(); drawChart(); }
-function toggleBB()               { chartState.showBB               = !chartState.showBB;               syncShowSelect(); drawChart(); }
+// ── Legacy toggle stubs (기존 코드 호환) ──────────────
+function toggleHighLow()          { chartState.showHighLow          = !chartState.showHighLow;          syncShowDropdown(); drawChart(); }
+function toggleBoxZone()          { chartState.showBoxZone          = !chartState.showBoxZone;          syncShowDropdown(); drawChart(); }
+function toggleBearBull()         { chartState.showPrediction       = !chartState.showPrediction;       syncShowDropdown(); drawChart(); }
+function toggleExtendedForecast() { if (!chartState.showPrediction) return; chartState.showExtendedForecast = !chartState.showExtendedForecast; syncShowDropdown(); drawChart(); }
+function toggleSubBox()           { chartState.showSubBox           = !chartState.showSubBox;           syncShowDropdown(); drawChart(); }
+function toggleBB()               { chartState.showBB               = !chartState.showBB;               syncShowDropdown(); drawChart(); }
 
 window.toggleHighLow = toggleHighLow;
 window.toggleBoxZone = toggleBoxZone;

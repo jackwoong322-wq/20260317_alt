@@ -14,25 +14,43 @@
     <div class="header-info">PEAK-NORMALIZED | BTC PAIR | DAYS SINCE PEAK</div>
   </div>
   <div class="chart-toolbar">
+
+    <!-- COIN 커스텀 드롭다운 -->
     <div class="toolbar-group">
-      <label class="toolbar-label" for="coinSelect">COIN</label>
-      <select id="coinSelect" class="toolbar-select" multiple></select>
+      <label class="toolbar-label">COIN</label>
+      <div class="custom-dropdown" id="coinDropdown">
+        <button class="dropdown-trigger" id="coinTrigger" type="button">
+          <span class="trigger-label">Loading...</span>
+          <span class="trigger-arrow">▾</span>
+        </button>
+        <div class="dropdown-panel" id="coinPanel"></div>
+      </div>
     </div>
+
+    <!-- CYCLES 커스텀 드롭다운 -->
     <div class="toolbar-group">
-      <label class="toolbar-label" for="cycleSelect">CYCLES</label>
-      <select id="cycleSelect" class="toolbar-select" multiple></select>
+      <label class="toolbar-label">CYCLES</label>
+      <div class="custom-dropdown" id="cycleDropdown">
+        <button class="dropdown-trigger" id="cycleTrigger" type="button">
+          <span class="trigger-label">Loading...</span>
+          <span class="trigger-arrow">▾</span>
+        </button>
+        <div class="dropdown-panel" id="cyclePanel"></div>
+      </div>
     </div>
+
+    <!-- SHOW 커스텀 드롭다운 -->
     <div class="toolbar-group">
-      <label class="toolbar-label" for="showSelect">SHOW</label>
-      <select id="showSelect" class="toolbar-select" multiple>
-        <option value="highlow">HIGH / LOW</option>
-        <option value="boxzone" selected>BOX ZONE</option>
-        <option value="predict" selected>PREDICT</option>
-        <option value="extended">EXTENDED</option>
-        <option value="subbox">SUB-BOX</option>
-        <option value="bb">BB (20,2)</option>
-      </select>
+      <label class="toolbar-label">SHOW</label>
+      <div class="custom-dropdown" id="showDropdown">
+        <button class="dropdown-trigger" id="showTrigger" type="button">
+          <span class="trigger-label">Loading...</span>
+          <span class="trigger-arrow">▾</span>
+        </button>
+        <div class="dropdown-panel" id="showPanel"></div>
+      </div>
     </div>
+
   </div>
 </div>
 
@@ -66,7 +84,6 @@ function resolveDevApiBaseUrl() {
   ) {
     return window.__API_BASE_URL__;
   }
-
   const isLocalDevShell =
     window.location.protocol === 'file:' ||
     window.location.hostname === 'localhost' ||
@@ -74,29 +91,21 @@ function resolveDevApiBaseUrl() {
   if (!isLocalDevShell) {
     throw new Error('Legacy chart shell requires React-injected dashboard data in production.');
   }
-
   const params = new URLSearchParams(window.location.search);
   const requestedApiBaseUrl = params.get('apiBaseUrl');
   if (requestedApiBaseUrl) {
     try {
       const requested = new URL(requestedApiBaseUrl);
       const allowedHosts = new Set(['localhost', '127.0.0.1']);
-      if (allowedHosts.has(requested.hostname)) {
-        return requested.origin;
-      }
-    } catch {
-      /* ignore invalid dev fallback URL */
-    }
+      if (allowedHosts.has(requested.hostname)) return requested.origin;
+    } catch { /* ignore */ }
   }
-
   return 'http://127.0.0.1:8000';
 }
 
 async function fetchDashboardJson(apiBaseUrl, path) {
   const response = await fetch(`${apiBaseUrl}${path}`);
-  if (!response.ok) {
-    throw new Error(`${path}: ${response.status} ${response.statusText}`);
-  }
+  if (!response.ok) throw new Error(`${path}: ${response.status} ${response.statusText}`);
   return response.json();
 }
 
@@ -105,7 +114,6 @@ window.__loadLegacyChartData = async function () {
     ALL_DATA = window.__LEGACY_CHART_DATA__;
     return;
   }
-
   const apiBaseUrl = resolveDevApiBaseUrl();
   const [manifestResponse, initialResponse] = await Promise.all([
     fetchDashboardJson(apiBaseUrl, '/api/dashboard-manifest'),
@@ -126,8 +134,8 @@ window.__loadLegacyChartData = async function () {
 await window.__loadLegacyChartData();
 await import(
   location.protocol === 'file:'
-    ? './dist/chart.js?v=1778933000'
-    : '/legacy/dist/chart.js?v=1778933000'
+    ? './dist/chart.js?v=1778934000'
+    : '/legacy/dist/chart.js?v=1778934000'
 );
 </script>
 </body>
