@@ -57,6 +57,8 @@ pairBTC/peak_timeline.html
 01_pairUSDT/033_visualizer_html.html
 01_pairUSDT/templates/dist/
 .coverage
+coverage/
+.claude/
 
 playwright-report/
 test-results/
