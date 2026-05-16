@@ -114,7 +114,7 @@ export default function LegacyAnalyzerApp() {
 
       try {
         const [shellRes, manifestResponse, initialResponse] = await Promise.all([
-          fetch('/legacy/chart-shell-v2.html'),
+          fetch(`/legacy/chart-shell-v2.html?_=${Date.now()}`, { cache: 'no-store' }),
           fetchJsonWithRetry<unknown>('/api/dashboard-manifest', onRetry),
           fetchJsonWithRetry<DashboardInitialResponse>('/api/dashboard-initial-data', onRetry),
         ])

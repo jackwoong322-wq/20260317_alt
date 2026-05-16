@@ -41,10 +41,14 @@ export function buildCoinList(_filter = '') {
     if (!select.dataset.wired) {
         select.dataset.wired = '1';
         select.onchange = () => {
-            chartState.selectedCoins = [select.value];
+            const selected = Array.from(select.selectedOptions).map((o) => o.value);
+            // 최소 1개 선택 유지
+            chartState.selectedCoins = selected.length > 0 ? selected : chartState.selectedCoins;
             void loadActiveCyclesForSelection();
         };
     }
+    // size 자동 조정 (최대 8)
+    select.size = Math.min(coins.length || 1, 8);
 }
 
 async function loadActiveCyclesForSelection() {

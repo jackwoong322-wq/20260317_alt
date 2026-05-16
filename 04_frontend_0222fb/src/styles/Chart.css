@@ -156,8 +156,10 @@
 
 .chart-area-fill {
   flex: 1;
-  min-height: 0;
+  min-height: 400px;
   width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .chart-area-compact {
@@ -513,6 +515,9 @@
 .chart-overlay-wrapper {
   position: relative;
   width: 100%;
-  overflow: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: visible; /* 이슈 #102: hidden → visible, 차트 하단 클리핑 수정 */
 }
 

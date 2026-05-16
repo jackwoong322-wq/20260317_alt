@@ -16,7 +16,7 @@
   <div class="chart-toolbar">
     <div class="toolbar-group">
       <label class="toolbar-label" for="coinSelect">COIN</label>
-      <select id="coinSelect" class="toolbar-select"></select>
+      <select id="coinSelect" class="toolbar-select" multiple></select>
     </div>
     <div class="toolbar-group">
       <label class="toolbar-label" for="cycleSelect">CYCLES</label>
@@ -126,8 +126,8 @@ window.__loadLegacyChartData = async function () {
 await window.__loadLegacyChartData();
 await import(
   location.protocol === 'file:'
-    ? './dist/chart.js?v=1778110154'
-    : '/legacy/dist/chart.js?v=1778110154'
+    ? './dist/chart.js?v=1778933000'
+    : '/legacy/dist/chart.js?v=1778933000'
 );
 </script>
 </body>

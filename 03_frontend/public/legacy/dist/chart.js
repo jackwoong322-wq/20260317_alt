@@ -1,5 +1,5 @@
-// chart.ts — Main entry point (modular build)
-const V = '?v=1778932100';
+// chart.ts ??Main entry point (modular build)
+const V = '?v=1778933000';
 const base = location.protocol === 'file:' ? './dist/' : '/legacy/dist/';
 
 const { initChart }                 = await import(base + 'chart-render-init.js' + V);
