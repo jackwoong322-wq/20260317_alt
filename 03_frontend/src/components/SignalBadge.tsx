@@ -9,6 +9,7 @@ export type Signal = 'BUY' | 'HOLD' | 'SELL'
 
 interface SignalConfig {
   label: string
+  shortLabel: string   // 375px 모바일용 축약형
   icon: string
   style: CSSProperties
   ariaLabel: string
@@ -17,6 +18,7 @@ interface SignalConfig {
 const SIGNAL_CONFIG: Record<Signal, SignalConfig> = {
   BUY: {
     label: 'ACCUMULATE ZONE',
+    shortLabel: 'ACCUM.',
     icon: '▲',
     style: {
       background: 'rgba(52, 211, 153, 0.12)',
@@ -27,6 +29,7 @@ const SIGNAL_CONFIG: Record<Signal, SignalConfig> = {
   },
   HOLD: {
     label: 'HOLD / OBSERVE',
+    shortLabel: 'HOLD',
     icon: '—',
     style: {
       background: 'rgba(100, 116, 139, 0.15)',
@@ -37,6 +40,7 @@ const SIGNAL_CONFIG: Record<Signal, SignalConfig> = {
   },
   SELL: {
     label: 'DISTRIBUTION ZONE',
+    shortLabel: 'DIST.',
     icon: '▼',
     style: {
       background: 'rgba(251, 113, 133, 0.12)',
@@ -46,6 +50,7 @@ const SIGNAL_CONFIG: Record<Signal, SignalConfig> = {
     ariaLabel: 'Current zone: Distribution / Sell',
   },
 }
+
 
 interface SignalBadgeProps {
   signal: Signal | string
