@@ -3,7 +3,7 @@ import { createChart } from 'lightweight-charts'
 import { useBearBoxData } from '../hooks/useChartData'
 import { useResizeChart } from '../hooks/useResizeChart'
 import { CHART_THEME } from '../utils/chartConstants'
-import { ChartErrorState, ChartLoadingState } from './ChartStatus'
+import { ChartErrorState, ChartLoadingState, ChartWakingState } from './ChartStatus'
 import ChartOverlay from './ChartOverlay'
 import '../styles/Chart.css'
 
@@ -14,7 +14,7 @@ function toDateString(timestamp) {
 }
 
 export default function BearBoxChart({ cycleNumber = 4 }) {
-  const { lineData, boxes, predictions, loading, error } = useBearBoxData(cycleNumber)
+  const { lineData, boxes, predictions, loading, error, retryInfo } = useBearBoxData(cycleNumber)
   const containerRef = useRef(null)
   const chartRef = useRef(null)
   // ChartOverlay에 전달할 박스 H/L 가격 배열
@@ -333,6 +333,17 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
   }, [lineData, boxes, predictions])
 
   if (loading) {
+    if (retryInfo) {
+      // Render cold-start 재시도 중
+      return (
+        <div className="chart-page"><div className="chart-container">
+          <ChartWakingState
+            attempt={retryInfo.attempt}
+            maxRetries={retryInfo.maxRetries}
+          />
+        </div></div>
+      )
+    }
     return (
       <div className="chart-page"><div className="chart-container">
         <ChartLoadingState
