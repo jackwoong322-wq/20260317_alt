@@ -47,6 +47,69 @@ import BullBoxChart from '../components/BullBoxChart'
 const cssPath = path.resolve(__dirname, '../styles/Chart.css')
 const cssContent = fs.readFileSync(cssPath, 'utf-8')
 
+const appCssPath = path.resolve(__dirname, '../styles/App.css')
+const appCssContent = fs.readFileSync(appCssPath, 'utf-8')
+
+// ── App.css 레이아웃 체인 검증 ─────────────────────────
+
+describe('[#102] App.css — chart-fullscreen 레이아웃', () => {
+  it('App.css 파일이 존재해야 한다', () => {
+    expect(fs.existsSync(appCssPath)).toBe(true)
+  })
+
+  it('.chart-fullscreen이 display:flex를 가져야 한다', () => {
+    const blockMatch = appCssContent.match(/\.chart-fullscreen\s*\{([^}]+)\}/)
+    const block = blockMatch ? blockMatch[1] : ''
+    expect(block).toContain('display: flex')
+  })
+
+  it('.chart-fullscreen이 flex-direction:column을 가져야 한다', () => {
+    const blockMatch = appCssContent.match(/\.chart-fullscreen\s*\{([^}]+)\}/)
+    const block = blockMatch ? blockMatch[1] : ''
+    expect(block).toContain('flex-direction: column')
+  })
+
+  it('.chart-fullscreen이 overflow:hidden을 가져야 한다', () => {
+    const blockMatch = appCssContent.match(/\.chart-fullscreen\s*\{([^}]+)\}/)
+    const block = blockMatch ? blockMatch[1] : ''
+    expect(block).toContain('overflow: hidden')
+  })
+
+  it('.chart-shell에 min-height:100%가 없어야 한다 (overflow 유발)', () => {
+    const blockMatch = appCssContent.match(/\.chart-shell\s*\{([^}]+)\}/)
+    const block = blockMatch ? blockMatch[1] : ''
+    expect(block).not.toContain('min-height: 100%')
+  })
+
+  it('.chart-shell이 flex:1을 가져야 한다', () => {
+    const blockMatch = appCssContent.match(/\.chart-shell\s*\{([^}]+)\}/)
+    const block = blockMatch ? blockMatch[1] : ''
+    expect(block).toContain('flex: 1')
+  })
+})
+
+describe('[#102] Chart.css — chart-area-compact 높이', () => {
+  it('.chart-area-compact의 min-height가 400px 이하여야 한다 (과도한 높이 방지)', () => {
+    const blockMatch = cssContent.match(/\.chart-area-compact\s*\{([^}]+)\}/)
+    const block = blockMatch ? blockMatch[1] : ''
+    const minHeightMatch = block.match(/min-height:\s*(\d+)px/)
+    const value = minHeightMatch ? parseInt(minHeightMatch[1]) : 9999
+    expect(value).toBeLessThanOrEqual(400)
+  })
+
+  it('.chart-page에 height:100%가 없어야 한다 (flex 환경)', () => {
+    const blockMatch = cssContent.match(/\.chart-page\s*\{([^}]+)\}/)
+    const block = blockMatch ? blockMatch[1] : ''
+    expect(block).not.toContain('height: 100%')
+  })
+
+  it('.chart-page에 flex:1이 있어야 한다', () => {
+    const blockMatch = cssContent.match(/\.chart-page\s*\{([^}]+)\}/)
+    const block = blockMatch ? blockMatch[1] : ''
+    expect(block).toContain('flex: 1')
+  })
+})
+
 describe('[#102] Chart.css — chart-overlay-wrapper', () => {
   it('CSS 파일이 존재해야 한다', () => {
     expect(fs.existsSync(cssPath)).toBe(true)

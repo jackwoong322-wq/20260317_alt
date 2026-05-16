@@ -31,10 +31,13 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
+  display: flex;
+  flex-direction: column;
   background: var(--bg);
   color: var(--text);
   font-family: 'JetBrains Mono', 'Manrope', sans-serif;
@@ -53,6 +56,7 @@ body {
   border-bottom: 1px solid var(--border);
   background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)), var(--panel);
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .header-left {
@@ -96,7 +100,8 @@ body {
 .main-wrap {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 62px);
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
