@@ -1,12 +1,14 @@
 // chart.ts — Main entry point (modular build)
-import { initChart } from './chart-render-init.js';
-import { setupTooltip } from './chart-render-tooltip.js';
-import { buildCoinList, buildCycleToggles, initDefaults } from './chart-ui.js';
-import { drawChart } from './chart-draw.js';
-import { initLoadStateFromInitial, } from './chart-lazy-load.js';
+const V = '?v=1778932100';
+const base = location.protocol === 'file:' ? './dist/' : '/legacy/dist/';
+
+const { initChart }                 = await import(base + 'chart-render-init.js' + V);
+const { setupTooltip }              = await import(base + 'chart-render-tooltip.js' + V);
+const { buildCoinList, buildCycleToggles, initDefaults } = await import(base + 'chart-ui.js' + V);
+const { drawChart }                 = await import(base + 'chart-draw.js' + V);
+const { initLoadStateFromInitial }  = await import(base + 'chart-lazy-load.js' + V);
+
 function initApp() {
-    // [Why] DOMContentLoaded 시 flex 레이아웃 미계산 → createChart 내부 Value is null.
-    // 2프레임 대기로 레이아웃 완료 후 차트 생성.
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {
             initChart();
@@ -19,9 +21,9 @@ function initApp() {
         });
     });
 }
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initApp);
-}
-else {
+} else {
     initApp();
 }

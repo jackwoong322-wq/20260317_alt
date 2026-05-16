@@ -9,44 +9,42 @@
 </head>
 <body>
 <div class="header">
-  <div class="header-title">ALT<span>/</span>BTC <span class="header-subtitle">CYCLE ANALYZER</span></div>
-  <div class="header-info">PEAK-NORMALIZED | BTC PAIR | DAYS SINCE PEAK</div>
+  <div class="header-left">
+    <div class="header-title">ALT<span>/</span>BTC <span class="header-subtitle">CYCLE ANALYZER</span></div>
+    <div class="header-info">PEAK-NORMALIZED | BTC PAIR | DAYS SINCE PEAK</div>
+  </div>
+  <div class="chart-toolbar">
+    <div class="toolbar-group">
+      <label class="toolbar-label" for="coinSelect">COIN</label>
+      <select id="coinSelect" class="toolbar-select"></select>
+    </div>
+    <div class="toolbar-group">
+      <label class="toolbar-label" for="cycleSelect">CYCLES</label>
+      <select id="cycleSelect" class="toolbar-select" multiple></select>
+    </div>
+    <div class="toolbar-group">
+      <label class="toolbar-label" for="showSelect">SHOW</label>
+      <select id="showSelect" class="toolbar-select" multiple>
+        <option value="highlow">HIGH / LOW</option>
+        <option value="boxzone" selected>BOX ZONE</option>
+        <option value="predict" selected>PREDICT</option>
+        <option value="extended">EXTENDED</option>
+        <option value="subbox">SUB-BOX</option>
+        <option value="bb">BB (20,2)</option>
+      </select>
+    </div>
+  </div>
 </div>
 
-<div class="container">
-  <aside class="sidebar">
-    <div class="sidebar-header">COINS - SELECT TO COMPARE</div>
-    <div class="search-box">
-      <input type="text" id="searchInput" placeholder="Search coin...">
-    </div>
-    <div class="coin-list" id="coinList"></div>
-  </aside>
-
-  <main class="main">
-    <div class="chart-toolbar">
-      <span class="toolbar-label">CYCLES:</span>
-      <div class="cycle-toggles" id="cycleToggles"></div>
-      <div class="toolbar-actions">
-        <span class="toolbar-label">SHOW:</span>
-        <button class="cycle-btn" id="toggleRange" onclick="toggleHighLow()">HIGH/LOW</button>
-        <button class="cycle-btn" id="toggleBox" onclick="toggleBoxZone()">BOX ZONE</button>
-        <button class="cycle-btn" id="toggleBearBull" onclick="toggleBearBull()">PREDICT</button>
-        <button class="cycle-btn" id="toggleExtendedForecast" onclick="toggleExtendedForecast()">EXTENDED</button>
-        <button class="cycle-btn" id="toggleSubBox" onclick="toggleSubBox()">SUB-BOX</button>
-        <button class="cycle-btn" id="toggleBB" style="border-color:#4a6080;color:#4a6080;" onclick="toggleBB()">BB (20,2)</button>
-      </div>
-    </div>
-
-    <div class="chart-area">
-      <div id="chart"></div>
-      <div class="legend" id="legend" style="display:none"></div>
-      <div id="bearBullOverlay" class="overlay-layer"></div>
-      <div id="boxMarksOverlay" class="overlay-layer overlay-marks"></div>
-      <div id="crosshairTooltip"></div>
-    </div>
-
-    <div class="stats-bar" id="statsBar"></div>
-  </main>
+<div class="main-wrap">
+  <div class="chart-area">
+    <div id="chart"></div>
+    <div class="legend" id="legend" style="display:none"></div>
+    <div id="bearBullOverlay" class="overlay-layer"></div>
+    <div id="boxMarksOverlay" class="overlay-layer overlay-marks"></div>
+    <div id="crosshairTooltip"></div>
+  </div>
+  <div class="stats-bar" id="statsBar"></div>
 </div>
 
 <script>
@@ -82,10 +80,7 @@ function resolveDevApiBaseUrl() {
   if (requestedApiBaseUrl) {
     try {
       const requested = new URL(requestedApiBaseUrl);
-      const allowedHosts = new Set([
-        'localhost',
-        '127.0.0.1',
-      ]);
+      const allowedHosts = new Set(['localhost', '127.0.0.1']);
       if (allowedHosts.has(requested.hostname)) {
         return requested.origin;
       }
