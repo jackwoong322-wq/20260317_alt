@@ -1,0 +1,67 @@
+/* SignalBadge.css */
+
+.signal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+  transition: opacity 160ms ease, transform 160ms ease;
+  white-space: nowrap;
+}
+
+/* 크기 변형 */
+.signal-badge--sm {
+  font-size: 11px;
+  padding: 2px 8px;
+  gap: 4px;
+}
+.signal-badge--md {
+  font-size: 13px;
+}
+.signal-badge--lg {
+  font-size: 15px;
+  padding: 6px 16px;
+  gap: 6px;
+}
+
+/* 신호별 색상 */
+.signal-badge--buy {
+  background: rgba(92, 179, 127, 0.16);
+  color: #5cb37f;
+  border-color: rgba(92, 179, 127, 0.32);
+}
+
+.signal-badge--hold {
+  background: rgba(160, 163, 175, 0.14);
+  color: #a0a3af;
+  border-color: rgba(160, 163, 175, 0.28);
+}
+
+.signal-badge--sell {
+  background: rgba(209, 125, 104, 0.16);
+  color: #d17d68;
+  border-color: rgba(209, 125, 104, 0.32);
+}
+
+.signal-badge__icon {
+  font-size: 0.8em;
+  line-height: 1;
+}
+
+.signal-badge__label {
+  line-height: 1;
+}
+
+/* 애니메이션: BUY일 때 미세한 펄스 효과 */
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.7; }
+}
+
+.signal-badge--buy {
+  animation: badge-pulse 2.4s ease-in-out infinite;
+}

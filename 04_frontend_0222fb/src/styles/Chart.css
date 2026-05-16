@@ -1,4 +1,4 @@
-﻿.chart-page {
+.chart-page {
   width: 100%;
   height: 100%;
   display: flex;
@@ -395,3 +395,48 @@
     flex-wrap: wrap;
   }
 }
+
+/* ── P1: 375px 모바일 — 가로 스크롤 제거 ── */
+@media (max-width: 640px) {
+  .chart-page {
+    overflow-x: hidden;
+  }
+
+  /* 차트 width 100% 고정 — 가로 스크롤 원인 제거 */
+  .chart-stack-main,
+  .chart-stack-sub,
+  .chart-area,
+  .chart-area-compact,
+  .chart-area-fill {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* lightweight-charts 가 생성하는 canvas 가로 넘침 방지 */
+  .chart-stack canvas,
+  .chart-area canvas {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .chart-toolbar-strip {
+    flex-wrap: wrap;
+    min-height: auto;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .chart-summary-compact {
+    width: 100%;
+  }
+}
+
+/* ── Chart HTML Overlay wrapper ── */
+.chart-overlay-wrapper {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
