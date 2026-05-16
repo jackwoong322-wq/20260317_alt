@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createChart } from 'lightweight-charts'
 import { useBearBoxData } from '../hooks/useChartData'
 import { useResizeChart } from '../hooks/useResizeChart'
 import { CHART_THEME } from '../utils/chartConstants'
 import { ChartErrorState, ChartLoadingState } from './ChartStatus'
+import ChartOverlay from './ChartOverlay'
 import '../styles/Chart.css'
 
 function toDateString(timestamp) {
@@ -16,6 +17,8 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
   const { lineData, boxes, predictions, loading, error } = useBearBoxData(cycleNumber)
   const containerRef = useRef(null)
   const chartRef = useRef(null)
+  // ChartOverlay에 전달할 박스 H/L 가격 배열
+  const [boxZones, setBoxZones] = useState([])
 
   const resizeLayoutKey = !loading && !error && lineData.length > 0 ? lineData.length : 0
 
@@ -107,6 +110,18 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
       .filter((item) => item.time)
 
     lineSeries.setData(chartData)
+
+    // ChartOverlay용 박스 H/L 좌표 배열 갱신
+    const zoneList = boxes.map((box) => ({
+      hi: box.Peak_Rate,
+      lo: box.Start_Rate,
+    }))
+    if (predictions.length > 0) {
+      predictions.forEach((pred) => {
+        zoneList.push({ hi: pred.Peak_Rate, lo: pred.Start_Rate })
+      })
+    }
+    setBoxZones(zoneList)
 
     const boxMarkers = []
     boxes.forEach((box, idx) => {
@@ -351,7 +366,10 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
             </p>
           </div>
 
-          <div ref={containerRef} className="chart-area chart-area-fill" />
+          <div className="chart-overlay-wrapper">
+            <div ref={containerRef} className="chart-area chart-area-fill" />
+            <ChartOverlay chartRef={chartRef} boxZones={boxZones} />
+          </div>
 
           <div className="chart-footer chart-footer-row">
             <span>
