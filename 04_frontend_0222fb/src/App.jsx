@@ -5,6 +5,7 @@ import BearBoxChart from './components/BearBoxChart'
 import BullBoxChart from './components/BullBoxChart'
 import TradingChart from './components/TradingChart'
 import SidebarNavigation from './components/layout/SidebarNavigation'
+import SummaryCard from './components/SummaryCard'
 import { fetchCycleMenu } from './lib/api'
 
 const FALLBACK_BEAR_CYCLES = [
@@ -162,6 +163,10 @@ function App() {
       )}
 
       <main id="main-content" className="chart-fullscreen" tabIndex="-1">
+        {/* 대시보드 상단 요약 카드 — 모든 뷰 공통 표시 */}
+        <div className="px-4 pt-3 pb-0">
+          <SummaryCard />
+        </div>
         <section className="chart-shell">
           {renderChart()}
         </section>

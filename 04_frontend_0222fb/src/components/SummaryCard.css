@@ -1,0 +1,226 @@
+/* SummaryCard.css */
+
+/* ── 카드 컨테이너 ── */
+.summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm, 8px);
+  padding: var(--space-md, 14px) var(--space-lg, 20px);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-panel, #1a1f2e) 95%, rgba(191, 144, 35, 0.12)),
+    color-mix(in srgb, var(--color-bg-elevated, #151a27) 90%, transparent)
+  );
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-lg, 14px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28);
+  container-type: inline-size;
+}
+
+/* ── 헤더 (사이클 차수 + 배지) ── */
+.summary-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm, 8px);
+  flex-wrap: wrap;
+}
+
+.summary-card__cycle {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.summary-card__cycle-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.summary-card__cycle-num {
+  font-family: var(--font-display, 'Inter', sans-serif);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--color-accent, #bfa023);
+  letter-spacing: -0.02em;
+}
+
+/* ── 통계 행 ── */
+.summary-card__stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 8px);
+  flex-wrap: wrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.summary-card__stats::-webkit-scrollbar {
+  display: none;
+}
+
+.summary-card__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 80px;
+  flex: 1;
+}
+
+.summary-card__stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.summary-card__stat-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-soft, #9ca3af);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-card__stat-value--primary {
+  font-size: 18px;
+  color: var(--color-text, #e5e7eb);
+}
+
+.summary-card__stat-value--predict {
+  color: var(--color-accent, #bfa023);
+}
+
+.summary-card__divider {
+  width: 1px;
+  height: 32px;
+  background: var(--color-border, rgba(255, 255, 255, 0.08));
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* ── 위치 바 ── */
+.summary-card__pos-section {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs, 6px);
+  margin-top: var(--space-xs, 6px);
+}
+
+.summary-card__pos-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-text-muted, #6b7280);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.summary-card__pos-bar-track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: visible;
+}
+
+.summary-card__pos-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.summary-card__pos-bar-label {
+  position: absolute;
+  top: -20px;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.summary-card__pos-desc {
+  font-size: 12px;
+  color: var(--color-text-muted, #6b7280);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.summary-card__pos-desc strong {
+  color: var(--color-text-soft, #9ca3af);
+}
+
+/* ── 로딩/에러 상태 ── */
+.summary-card--loading {
+  gap: var(--space-md, 14px);
+}
+
+.summary-card__skeleton {
+  height: 20px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.summary-card__skeleton--narrow {
+  width: 60%;
+  height: 14px;
+}
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.summary-card--error {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-sm, 8px);
+  padding: var(--space-sm, 8px) var(--space-md, 14px);
+}
+
+.summary-card__error-icon {
+  font-size: 16px;
+  color: #d17d68;
+}
+
+.summary-card__error-msg {
+  font-size: 13px;
+  color: var(--color-text-muted, #6b7280);
+}
+
+/* ── 반응형 (375px ~ 640px) ── */
+@container (max-width: 480px) {
+  .summary-card__stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-sm, 8px);
+  }
+
+  .summary-card__divider {
+    display: none;
+  }
+
+  .summary-card__stat {
+    min-width: unset;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    border: 1px solid var(--color-border, rgba(255, 255, 255, 0.06));
+  }
+
+  .summary-card__stat-value--primary {
+    font-size: 15px;
+  }
+}
