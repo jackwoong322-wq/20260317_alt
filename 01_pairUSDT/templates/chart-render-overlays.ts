@@ -286,6 +286,9 @@ export function renderBoxMarks(
   }
 
   function addForecastGuide(day: number | null | undefined, label: string, kind: 'now' | 'forecast'): void {
+    // overlay는 renderBoxMarks 외부 스코프에서 null 체크됐으나,
+    // 중첩 함수 내에서는 TS 타입 내로잉이 전파되지 않으므로 명시적으로 확인
+    if (!overlay) return;
     const dayNum = Number(day);
     if (!Number.isFinite(dayNum)) {
       return;
@@ -349,7 +352,15 @@ export function renderBoxMarks(
          result === 'PRED_BEAR_ACTIVE' || result === 'PRED_BULL_ACTIVE');
       const isActiveBear = result === 'BEAR_ACTIVE' || result === 'PRED_BEAR_ACTIVE';
 
-      const prevBox = zones[zi - 1] || null;
+      // [Fix] boxIndex 기반으로 정확한 이전 박스를 탐색 (zi-1은 필터 스킵으로 틀릴 수 있음)
+      const curBoxIdx = z.boxIndex != null ? Number(z.boxIndex) : zi;
+      const prevBox =
+        zones.slice(0, zi).reverse().find((bz: any) => {
+          const bIdx = bz.boxIndex != null ? Number(bz.boxIndex) : null;
+          return bIdx != null ? bIdx === curBoxIdx - 1 : false;
+        }) ||
+        zones[zi - 1] ||
+        null;
       const refHighForLow = prevBox ? prevBox.hi : 100;
       const refLowForHigh = z.lo;
 
@@ -551,7 +562,8 @@ export function renderBoxMarks(
       const lblHi = document.createElement('div');
       lblHi.className = 'bz-label' + (isPrediction ? ' prediction' : '');
       lblHi.style.color = hiLblColor;
-      const hiBoxNo = zi + 1;
+      // [Fix] boxIndex(DB 순번)를 우선 사용, 없으면 zi+1 폴백
+      const hiBoxNo = z.boxIndex != null ? Number(z.boxIndex) + 1 : zi + 1;
       const hiText = formatBoxLabel(
         'H',
         hiBoxNo,
@@ -606,7 +618,8 @@ export function renderBoxMarks(
       const lblLo = document.createElement('div');
       lblLo.className = 'bz-label' + (isPrediction ? ' prediction' : '');
       lblLo.style.color = loLblColor;
-      const loBoxNo = zi + 1;
+      // [Fix] boxIndex(DB 순번)를 우선 사용, 없으면 zi+1 폴백
+      const loBoxNo = z.boxIndex != null ? Number(z.boxIndex) + 1 : zi + 1;
       const loText = formatBoxLabel(
         'L',
         loBoxNo,
@@ -722,13 +735,15 @@ export function renderBoxMarks(
           const hiElapsedText = hiElapsedDays == null ? '-' : hiElapsedDays + 'd';
           const loElapsedText = loElapsedDays == null ? '-' : loElapsedDays + 'd';
 
+          // [Fix] tooltip도 boxIndex 기반 번호 사용
+          const tooltipBoxNo = z.boxIndex != null ? Number(z.boxIndex) + 1 : zi + 1;
           tooltip.innerHTML =
             '<div class="bt-title" style="color:' +
             (isBear ? '#ff4466' : '#FFB800') +
             '">' +
             titleLabel +
             ' #' +
-            (zi + 1) +
+            tooltipBoxNo +
             predBadge +
             '</div>' +
             '<div class="bt-row"><span class="bt-key">고점</span><span class="bt-val">' +

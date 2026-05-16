@@ -93,6 +93,7 @@ Applies to `01_pairUSDT/`.
 - Keep functions focused and small.
 - Handle errors explicitly with `try/catch` or `try/except`.
 - Add comments only for non-obvious logic.
+- 단위 테스트(QA) 환경이 없다면 작업을 시작하기 전에 반드시 사용자에게 테스트 환경 구축 여부를 먼저 묻고 대기할 것. 명시적으로 "테스트 생략"이라는 지시가 없는 한 임의로 테스트 단계를 건너뛰는 것을 엄격히 금지함.
 
 ---
 
