@@ -36,7 +36,6 @@ export interface BearBoxesData {
 }
 
 interface SummaryCardProps {
-  cycleNumber: number
   data: BearBoxesData | null
 }
 
@@ -50,7 +49,7 @@ function calcPositionPercent(current: number, lo: number, hi: number): number {
   return Math.max(0, Math.min(100, ((current - lo) / (hi - lo)) * 100))
 }
 
-export default function SummaryCard({ cycleNumber, data }: SummaryCardProps) {
+export default function SummaryCard({ data }: SummaryCardProps) {
   if (!data || data.lineData.length === 0) {
     return (
       <div style={s.wrap}>
@@ -66,6 +65,7 @@ export default function SummaryCard({ cycleNumber, data }: SummaryCardProps) {
   const nextPred = data.predictions[0]?.Peak_Rate ?? null
   const positionPct = calcPositionPercent(currentRate, loRate, hiRate)
   const signal = positionToSignal(positionPct)
+  const CYCLE_LABEL = 'CURRENT CYCLE (2025)'
 
   const fillColor =
     signal === 'BUY' ? '#34d399' : signal === 'SELL' ? '#fb7185' : '#6c9cff'
@@ -74,8 +74,8 @@ export default function SummaryCard({ cycleNumber, data }: SummaryCardProps) {
     <div style={s.wrap} aria-label="Cycle summary">
       {/* 왼쪽: 사이클 표시 */}
       <div style={s.cycleBlock}>
-        <span style={s.eyebrow}>BTC CYCLE</span>
-        <span style={s.cycleNum}>#{cycleNumber}</span>
+        <span style={s.eyebrow}>BTC</span>
+        <span style={s.cycleNum}>CURRENT CYCLE (2025)</span>
       </div>
 
       {/* 구분선 */}

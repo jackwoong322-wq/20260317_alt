@@ -9,7 +9,7 @@ const BASE_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 // ── Render cold-start 재시도 설정 ────────────────────────────────────
 const MAX_RETRIES = 8
 const RETRY_INTERVAL_MS = 10_000
-const CYCLE_NUMBER = 4  // 기본 사이클 차수
+const CYCLE_NUMBER = 5  // 현재 사이클 (2025)
 
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
@@ -164,7 +164,7 @@ export default function LegacyAnalyzerApp() {
       )}
 
       {/* 요약 카드 (항상 표시 — 데이터 없으면 skeleton) */}
-      <SummaryCard cycleNumber={CYCLE_NUMBER} data={bearBoxesData} />
+      <SummaryCard data={bearBoxesData} />
 
       {/* 메인 영역: 로딩 / 에러 / 차트 */}
       {loading ? (
