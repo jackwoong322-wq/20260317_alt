@@ -228,6 +228,10 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
         placed.push(getLabelRectInOverlay(el));
     }
     function addForecastGuide(day, label, kind) {
+        // overlay는 renderBoxMarks 외부 스코프에서 null 체크됐으나,
+        // 중첩 함수 내에서는 TS 타입 내로잉이 전파되지 않으므로 명시적으로 확인
+        if (!overlay)
+            return;
         const dayNum = Number(day);
         if (!Number.isFinite(dayNum)) {
             return;
