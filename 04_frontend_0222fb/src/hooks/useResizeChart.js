@@ -24,7 +24,8 @@ export function useResizeChart(containerRef, chartRefs, options = {}) {
           const chart = ref.current
           if (!chart) return
           const opts = { width: Math.floor(width) }
-          if (watchHeight) opts.height = Math.floor(height)
+          // BUG-09: height 0 방어 — 최소 120px 보장
+          if (watchHeight && height > 0) opts.height = Math.max(120, Math.floor(height))
           chart.applyOptions(opts)
         })
       }
@@ -41,7 +42,8 @@ export function useResizeChart(containerRef, chartRefs, options = {}) {
         const chart = ref.current
         if (!chart) return
         const opts = { width: Math.floor(initialWidth) }
-        if (watchHeight) opts.height = Math.floor(initialHeight)
+        // BUG-09: 초기값도 동일한 가드 적용
+        if (watchHeight && initialHeight > 0) opts.height = Math.max(120, Math.floor(initialHeight))
         chart.applyOptions(opts)
       })
     }

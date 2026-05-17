@@ -149,6 +149,7 @@ function App() {
           className="header-btn theme-toggle-btn"
           onClick={toggleTheme}
           aria-label={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+          aria-pressed={theme === 'light'}
           title={theme === 'dark' ? '라이트 모드' : '다크 모드'}
         >
           {theme === 'dark' ? '☀️' : '🌙'}
