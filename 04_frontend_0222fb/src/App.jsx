@@ -7,6 +7,7 @@ import TradingChart from './components/TradingChart'
 import SidebarNavigation from './components/layout/SidebarNavigation'
 import SummaryCard from './components/SummaryCard'
 import { fetchCycleMenu } from './lib/api'
+import { useTheme } from './hooks/useTheme'
 
 const FALLBACK_BEAR_CYCLES = [
   { id: 'bear1', label: 'Cycle 1 (2013.12)', cycleNumber: 1 },
@@ -37,6 +38,7 @@ function App() {
   const [expandedSection, setExpandedSection] = useState('bear')
   const [headerContent, setHeaderContent] = useState(null)
   const [cycleMenu, setCycleMenu] = useState(null)
+  const { theme, toggleTheme } = useTheme()  // F-05
 
   useEffect(() => {
     let cancelled = false
@@ -142,6 +144,15 @@ function App() {
           NAV
         </button>
         {headerContent && <div className="header-slot">{headerContent}</div>}
+        {/* F-05: 테마 토글 버튼 */}
+        <button
+          className="header-btn theme-toggle-btn"
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+          title={theme === 'dark' ? '라이트 모드' : '다크 모드'}
+        >
+          {theme === 'dark' ? '☀️' : '🌙'}
+        </button>
       </header>
 
       <SidebarNavigation
@@ -167,7 +178,7 @@ function App() {
         <div className="px-4 pt-3 pb-0">
           <SummaryCard />
         </div>
-        <section className="chart-shell">
+        <section key={selectedChart} className="chart-shell">
           {renderChart()}
         </section>
       </main>

@@ -8,11 +8,10 @@
 
 import { useState, useEffect } from 'react'
 import SignalBadge from './SignalBadge'
+import { fetchSummaryData } from '../lib/api'
 
 const CURRENT_CYCLE = 5
 const CURRENT_CYCLE_LABEL = 'CURRENT CYCLE (2025)'
-
-const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 
 function formatRate(value) {
   if (value == null) return '—'
@@ -78,9 +77,7 @@ export default function SummaryCard() {
         setError(null)
 
         // 03_frontend와 동일한 엔드포인트 사용
-        const res = await fetch(`${API_BASE}/api/bear-boxes?cycle=${CURRENT_CYCLE}`)
-        if (!res.ok) throw new Error(`API ${res.status}`)
-        const data = await res.json()
+        const data = await fetchSummaryData(CURRENT_CYCLE)
 
         if (!cancelled) {
           const lineData = data.lineData ?? []

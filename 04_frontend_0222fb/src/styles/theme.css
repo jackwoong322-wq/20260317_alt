@@ -19,3 +19,26 @@
   --color-danger: oklch(0.66 0.18 25);
   --color-info: oklch(0.66 0.1 245);
 }
+
+/* ── 라이트 테마 ────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --color-bg: oklch(0.97 0.004 255);
+  --color-bg-elevated: oklch(1 0 0);
+  --color-panel: oklch(0.94 0.006 255);
+  --color-panel-strong: oklch(0.90 0.008 255);
+  --color-panel-soft: oklch(0.96 0.004 255);
+  --color-border: oklch(0.82 0.008 255);
+  --color-border-strong: oklch(0.72 0.010 255);
+  --color-text: oklch(0.18 0.012 255);
+  --color-text-muted: oklch(0.40 0.010 255);
+  --color-text-soft: oklch(0.55 0.010 255);
+
+  --color-accent: oklch(0.60 0.14 72);
+  --color-accent-strong: oklch(0.52 0.16 72);
+  --color-accent-soft: oklch(0.88 0.04 72);
+  --color-success: oklch(0.52 0.14 150);
+  --color-danger: oklch(0.52 0.18 25);
+  --color-info: oklch(0.48 0.12 245);
+}

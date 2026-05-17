@@ -1,9 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createChart } from 'lightweight-charts'
 import { useCycleComparisonData } from '../hooks/useChartData'
+import { useChartTooltip } from '../hooks/useChartTooltip'
+import { useChartExport } from '../hooks/useChartExport'
 import { CHART_THEME, COLORS, COLOR_NAMES } from '../utils/chartConstants'
 import { useResizeChart } from '../hooks/useResizeChart'
 import { ChartErrorState, ChartLoadingState, ChartWakingState } from './ChartStatus'
+import ChartTooltip from './ChartTooltip'
 import '../styles/Chart.css'
 
 function dayToDateString(day) {
@@ -18,12 +21,29 @@ export default function CycleComparisonChart({ onHeaderContent }) {
   const chartRef = useRef(null)
   const [hiddenSeries, setHiddenSeries] = useState(new Set())
 
+  // 시리즈 ref 배열 — 툴팁 데이터 추출에 사용
+  const seriesRefsRef = useRef([])
+
+  // F-08: PNG 내보내기
+  const { exportPng, exporting } = useChartExport(chartRef, 'btc-cycle-comparison')
+
   const resizeLayoutKey = !loading && !error && series.length > 0 ? series.length : 0
 
   useResizeChart(containerRef, [chartRef], {
     watchHeight: true,
     layoutKey: resizeLayoutKey,
   })
+
+  // ── 툴팁 훅 통합 ────────────────────────────────────────────────
+  const seriesListForTooltip = series
+    .map((item, idx) => ({
+      name: item.name,
+      color: COLORS[idx % COLORS.length],
+      seriesRef: seriesRefsRef.current[idx] ?? { current: null },
+    }))
+    .filter((_, idx) => !hiddenSeries.has(series[idx]?.name))
+
+  const { tooltipState } = useChartTooltip(chartRef, seriesListForTooltip, containerRef)
 
   const toggleSeries = (name) => {
     setHiddenSeries((prev) => {
@@ -72,6 +92,7 @@ export default function CycleComparisonChart({ onHeaderContent }) {
       chartRef.current?.remove()
     } catch (_) {}
     chartRef.current = null
+    seriesRefsRef.current = []
 
     const chart = createChart(containerRef.current, {
       layout: { background: { color: 'transparent' }, textColor: CHART_THEME.textMuted },
@@ -139,6 +160,8 @@ export default function CycleComparisonChart({ onHeaderContent }) {
         axisLabelVisible: true,
         title: `C${idx + 1} Min (${item.minRate.toFixed(1)}%)`,
       })
+      // 시리즈 ref 저장 (툴팁 데이터 추출용)
+      seriesRefsRef.current[idx] = { current: lineSeries }
     })
 
     chart.timeScale().setVisibleRange({
@@ -151,6 +174,7 @@ export default function CycleComparisonChart({ onHeaderContent }) {
         chartRef.current?.remove()
       } catch (_) {}
       chartRef.current = null
+      seriesRefsRef.current = []
     }
   }, [series, hiddenSeries])
 
@@ -185,7 +209,8 @@ export default function CycleComparisonChart({ onHeaderContent }) {
   return (
     <div className="chart-page">
       <div className="chart-container">
-        <div className="chart-wrapper">
+        {/* chart-wrapper에 position:relative 필수 — 툴팁 absolute 기준점 */}
+        <div className="chart-wrapper" style={{ position: 'relative' }}>
           <div className="chart-title-strip">
             <span className="chart-title-strip-kicker">Cycle Comparison</span>
             <h2 className="chart-title-strip-heading">비트코인 사이클 하락률 비교</h2>
@@ -194,14 +219,28 @@ export default function CycleComparisonChart({ onHeaderContent }) {
             </p>
           </div>
 
-          <div ref={containerRef} className="chart-area chart-area-compact" />
+          {/* 차트 컨테이너 — position:relative (툴팁 기준점) */}
+          <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <div ref={containerRef} className="chart-area chart-area-compact" />
+            {/* HTML 오버레이 툴팁 */}
+            <ChartTooltip tooltipState={tooltipState} />
+          </div>
 
           <div className="chart-footer chart-footer-row">
             <span>Data source: Supabase BTC/USDT OHLCV</span>
+            {/* F-08: PNG 내보내기 버튼 */}
+            <button
+              className="chart-export-btn"
+              onClick={exportPng}
+              disabled={exporting}
+              title="차트를 PNG로 저장"
+              aria-label="차트 PNG 내보내기"
+            >
+              {exporting ? '저장 중...' : '📥 PNG'}
+            </button>
           </div>
         </div>
       </div>
     </div>
   )
 }
-

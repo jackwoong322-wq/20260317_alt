@@ -284,6 +284,39 @@
   border: 0;
 }
 
+.theme-toggle-btn {
+  position: fixed;
+  top: 12px;
+  right: var(--space-md);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-panel) 85%, transparent);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 41;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    transform 200ms ease;
+  pointer-events: auto;
+}
+
+.theme-toggle-btn:hover {
+  background: color-mix(in srgb, var(--color-panel-strong) 90%, transparent);
+  border-color: var(--color-border-strong);
+  transform: rotate(20deg) scale(1.08);
+}
+
+.theme-toggle-btn:active {
+  transform: rotate(0deg) scale(0.95);
+}
+
 .chart-fullscreen {
   position: relative;
   min-width: 0;
@@ -376,5 +409,94 @@
 @media (max-width: 560px) {
   .sidebar-copy {
     max-width: none;
+  }
+}
+
+/* ── F-04: 375px 모바일 완전 적응 ──────────────────────────────────── */
+@media (max-width: 430px) {
+  /* 가로 스크롤 원천 차단 */
+  html, body {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  /* 헤더 높이 최소화 */
+  .app-header {
+    height: 52px;
+    padding: 0 var(--space-sm);
+    gap: var(--space-xs);
+  }
+
+  .chart-fullscreen {
+    padding-top: 52px;
+  }
+
+  /* 테마 버튼 소형화 */
+  .theme-toggle-btn {
+    top: 8px;
+    right: var(--space-sm);
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+
+  /* 헤더 NAV 버튼 소형화 */
+  .menu-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 9px;
+    padding: 0;
+    flex-shrink: 0;
+  }
+
+  /* 헤더 슬롯 폭 제한 — 테마 버튼 공간 확보 */
+  .header-slot {
+    max-width: calc(100vw - 100px);
+  }
+
+  /* 헤더 stat 카드 소형화 */
+  .header-stat-card {
+    padding: 4px 8px;
+    gap: 2px;
+  }
+
+  .header-stat-label {
+    font-size: 9px;
+  }
+
+  .header-stat-value {
+    font-size: 10px;
+  }
+
+  /* 차트 타이틀 스트립 압축 */
+  .chart-title-strip {
+    padding: var(--space-xs) var(--space-sm) 6px;
+    gap: 2px;
+  }
+
+  .chart-title-strip-heading {
+    font-size: var(--text-md);
+    margin: 0;
+  }
+
+  .chart-title-strip-copy {
+    display: none; /* 375px에서 설명 텍스트 숨김 */
+  }
+
+  .chart-title-strip-kicker {
+    font-size: 9px;
+  }
+
+  /* 차트 푸터 압축 */
+  .chart-footer {
+    padding: 4px var(--space-sm);
+    font-size: 10px;
+    min-height: 28px;
+  }
+
+  /* SummaryCard 레이아웃 단일 컬럼 */
+  .px-4 {
+    padding-left: var(--space-sm) !important;
+    padding-right: var(--space-sm) !important;
   }
 }
