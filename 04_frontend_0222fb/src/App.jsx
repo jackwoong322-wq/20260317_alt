@@ -178,7 +178,7 @@ function App() {
         <div className="px-4 pt-3 pb-0">
           <SummaryCard />
         </div>
-        <section className="chart-shell">
+        <section key={selectedChart} className="chart-shell">
           {renderChart()}
         </section>
       </main>

@@ -13,10 +13,28 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/tests/setup.js'],
+    // E2E 테스트 제외 (Playwright 전용)
+    exclude: ['**/node_modules/**', '**/e2e/**', '**/*.spec.js'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json'],
-      include: ['src/components/**/*.jsx'],
+      reporter: ['text', 'json', 'json-summary'],
+      include: [
+        'src/components/**/*.jsx',
+        'src/hooks/**/*.js',
+        'src/lib/**/*.js',
+        'src/utils/**/*.js',
+        'src/mocks/**/*.js',
+      ],
+      exclude: [
+        'src/components/ChartStatus.jsx',  // wrapper only
+        'src/**/*.test.*',
+      ],
+      // TECH-03: 커버리지 임계값 — 80% 목표
+      thresholds: {
+        lines: 60,
+        functions: 60,
+        branches: 50,
+      },
     },
   },
-})
+})

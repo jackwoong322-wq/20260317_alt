@@ -4,6 +4,8 @@ import { useBullBoxData } from '../hooks/useChartData'
 import { useResizeChart } from '../hooks/useResizeChart'
 import { CHART_THEME } from '../utils/chartConstants'
 import { ChartErrorState, ChartLoadingState, ChartWakingState } from './ChartStatus'
+import { useBullBoxTooltip } from '../hooks/useBullBoxTooltip'
+import BearBoxTooltip from './BearBoxTooltip'   // 동일 UI 재사용
 import '../styles/Chart.css'
 
 function toDateString(timestamp) {
@@ -16,12 +18,21 @@ export default function BullBoxChart({ cycleNumber = 3 }) {
   const { lineData, boxes, loading, error, cycleInfo, retryInfo } = useBullBoxData(cycleNumber)
   const containerRef = useRef(null)
   const chartRef = useRef(null)
+  const mainSeriesRef = useRef(null)  // TECH-01 툴팁용
 
   const resizeLayoutKey = !loading && !error && lineData.length > 0 ? lineData.length : 0
 
   useResizeChart(containerRef, [chartRef], {
     watchHeight: true,
     layoutKey: resizeLayoutKey,
+  })
+
+  // TECH-01: BullBox 전용 HTML 툴팁
+  const { tooltipState } = useBullBoxTooltip({
+    chartRef,
+    mainSeriesRef,
+    containerRef,
+    boxes,
   })
 
   useEffect(() => {
@@ -69,6 +80,8 @@ export default function BullBoxChart({ cycleNumber = 3 }) {
     chartRef.current = chart
 
     const lineSeries = chart.addLineSeries({ color: CHART_THEME.success, lineWidth: 2 })
+    mainSeriesRef.current = lineSeries  // TECH-01 툴팁용 ref 등록
+
     const chartData = lineData
       .filter((item) => item.timestamp)
       .map((item) => ({ time: toDateString(item.timestamp), value: item.value }))
@@ -138,9 +151,8 @@ export default function BullBoxChart({ cycleNumber = 3 }) {
     chart.timeScale().fitContent()
 
     return () => {
-      try {
-        chartRef.current?.remove()
-      } catch (_) {}
+      mainSeriesRef.current = null
+      try { chartRef.current?.remove() } catch (_) {}
       chartRef.current = null
     }
   }, [lineData, boxes])
@@ -158,6 +170,7 @@ export default function BullBoxChart({ cycleNumber = 3 }) {
         <ChartLoadingState
           title="데이터를 불러오는 중입니다..."
           message="Bull Market Box 구간을 준비하고 있습니다."
+          type="bar"
         />
       </div></div>
     )
@@ -186,7 +199,11 @@ export default function BullBoxChart({ cycleNumber = 3 }) {
             </p>
           </div>
 
-          <div ref={containerRef} className="chart-area chart-area-fill" />
+          {/* TECH-01: 툴팁 기준점 */}
+          <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <div ref={containerRef} className="chart-area chart-area-fill" />
+            <BearBoxTooltip tooltipState={tooltipState} />
+          </div>
 
           <div className="chart-footer chart-footer-row single-line">
             <span>

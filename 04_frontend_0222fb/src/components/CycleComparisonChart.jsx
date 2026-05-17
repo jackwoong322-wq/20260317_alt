@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createChart } from 'lightweight-charts'
 import { useCycleComparisonData } from '../hooks/useChartData'
 import { useChartTooltip } from '../hooks/useChartTooltip'
+import { useChartExport } from '../hooks/useChartExport'
 import { CHART_THEME, COLORS, COLOR_NAMES } from '../utils/chartConstants'
 import { useResizeChart } from '../hooks/useResizeChart'
 import { ChartErrorState, ChartLoadingState, ChartWakingState } from './ChartStatus'
@@ -22,6 +23,9 @@ export default function CycleComparisonChart({ onHeaderContent }) {
 
   // 시리즈 ref 배열 — 툴팁 데이터 추출에 사용
   const seriesRefsRef = useRef([])
+
+  // F-08: PNG 내보내기
+  const { exportPng, exporting } = useChartExport(chartRef, 'btc-cycle-comparison')
 
   const resizeLayoutKey = !loading && !error && series.length > 0 ? series.length : 0
 
@@ -224,6 +228,16 @@ export default function CycleComparisonChart({ onHeaderContent }) {
 
           <div className="chart-footer chart-footer-row">
             <span>Data source: Supabase BTC/USDT OHLCV</span>
+            {/* F-08: PNG 내보내기 버튼 */}
+            <button
+              className="chart-export-btn"
+              onClick={exportPng}
+              disabled={exporting}
+              title="차트를 PNG로 저장"
+              aria-label="차트 PNG 내보내기"
+            >
+              {exporting ? '저장 중...' : '📥 PNG'}
+            </button>
           </div>
         </div>
       </div>
