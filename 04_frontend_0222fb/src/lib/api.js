@@ -116,3 +116,8 @@ export async function fetchCycleMenu(onRetry) {
   return apiFetch('/api/cycle-menu', {}, onRetry)
 }
 
+/* SummaryCard — 현재 사이클 요약 데이터 */
+export async function fetchSummaryData(cycleNumber = 4, onRetry) {
+  return apiFetch('/api/bear-boxes', { cycle: cycleNumber }, onRetry)
+}
+

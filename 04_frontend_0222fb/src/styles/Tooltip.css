@@ -1,0 +1,138 @@
+/* ── Tooltip.css — HTML 오버레이 툴팁 전용 스타일 ─────────────────── */
+
+.chart-tooltip {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  min-width: 180px;
+  max-width: 240px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-bg-elevated) 96%, transparent);
+  box-shadow:
+    0 8px 24px rgba(3, 7, 15, 0.55),
+    0 0 0 1px rgba(191, 144, 35, 0.08) inset;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  overflow: hidden;
+
+  /* 등장 애니메이션 */
+  animation: tooltip-appear 120ms ease forwards;
+}
+
+@keyframes tooltip-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── 헤더 (날짜) ─────────────────────────────────────────────────── */
+.chart-tooltip__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  background: color-mix(in srgb, var(--color-accent-soft) 30%, transparent);
+}
+
+.chart-tooltip__day {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+/* ── 바디 (시리즈 목록) ──────────────────────────────────────────── */
+.chart-tooltip__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+}
+
+.chart-tooltip__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 2px;
+  border-radius: 6px;
+  transition: background-color 80ms ease;
+}
+
+.chart-tooltip__row:hover {
+  background: color-mix(in srgb, var(--color-panel) 60%, transparent);
+}
+
+/* 색상 점 */
+.chart-tooltip__dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
+/* 시리즈명 */
+.chart-tooltip__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 현재값 */
+.chart-tooltip__value {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+/* 등락 */
+.chart-tooltip__diff {
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.chart-tooltip__diff--up {
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+}
+
+.chart-tooltip__diff--down {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+}
+
+/* ── 모바일 적응 (375px) ─────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .chart-tooltip {
+    min-width: 150px;
+    max-width: 190px;
+  }
+
+  .chart-tooltip__name {
+    font-size: 10px;
+  }
+
+  .chart-tooltip__value {
+    font-size: 11px;
+  }
+}
