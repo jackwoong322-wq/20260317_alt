@@ -11,7 +11,7 @@ import '../styles/Chart.css'
 
 export default function ChartSkeleton({ type = 'line' }) {
   return (
-    <div className="chart-skeleton" role="status" aria-label="차트 데이터를 불러오는 중입니다">
+    <div className="chart-skeleton" role="status" aria-live="polite">
       {/* 타이틀 스트립 스켈레톤 */}
       <div className="chart-skeleton__title-strip">
         <div className="chart-skeleton__kicker skel-pulse" />

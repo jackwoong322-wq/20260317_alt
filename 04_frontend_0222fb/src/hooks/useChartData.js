@@ -18,8 +18,10 @@ import {
 } from '../lib/api'
 
 // ── 공통 재시도 콜백 팩토리 ─────────────────────────────────────────
-function makeRetryCallback(setRetryInfo) {
+// cancelledRef: { current: boolean } — 언마운트 후 state 업데이트 방지
+function makeRetryCallback(setRetryInfo, cancelledRef) {
   return (attempt, maxRetries) => {
+    if (cancelledRef.current) return
     setRetryInfo({ attempt, maxRetries })
   }
 }
@@ -31,26 +33,26 @@ export function useCycleComparisonData() {
   const [retryInfo, setRetryInfo] = useState(null)
 
   useEffect(() => {
-    let cancelled = false
+    const cancelledRef = { current: false }
 
     async function loadData() {
       try {
         setLoading(true)
         setRetryInfo(null)
-        const result = await fetchCycleComparison(makeRetryCallback(setRetryInfo))
-        if (!cancelled) {
+        const result = await fetchCycleComparison(makeRetryCallback(setRetryInfo, cancelledRef))
+        if (!cancelledRef.current) {
           setSeries(result.series || [])
           setError(null)
           setRetryInfo(null)
         }
       } catch (err) {
-        if (!cancelled) setError(err.message)
+        if (!cancelledRef.current) setError(err.message)
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelledRef.current) setLoading(false)
       }
     }
     loadData()
-    return () => { cancelled = true }
+    return () => { cancelledRef.current = true }
   }, [])
 
   return { series, loading, error, retryInfo }
@@ -67,14 +69,14 @@ export function useBearBoxData(cycleNumber = 4) {
   const [retryInfo, setRetryInfo] = useState(null)
 
   useEffect(() => {
-    let cancelled = false
+    const cancelledRef = { current: false }
 
     async function loadData() {
       try {
         setLoading(true)
         setRetryInfo(null)
-        const result = await fetchBearBoxes(cycleNumber, makeRetryCallback(setRetryInfo))
-        if (!cancelled) {
+        const result = await fetchBearBoxes(cycleNumber, makeRetryCallback(setRetryInfo, cancelledRef))
+        if (!cancelledRef.current) {
           setLineData(result.lineData || [])
           setBoxes(result.boxes || [])
           setPredictions(result.predictions || [])
@@ -84,13 +86,13 @@ export function useBearBoxData(cycleNumber = 4) {
           setRetryInfo(null)
         }
       } catch (err) {
-        if (!cancelled) setError(err.message)
+        if (!cancelledRef.current) setError(err.message)
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelledRef.current) setLoading(false)
       }
     }
     loadData()
-    return () => { cancelled = true }
+    return () => { cancelledRef.current = true }
   }, [cycleNumber])
 
   return { lineData, boxes, predictions, loading, error, cycleInfo, config, retryInfo }
@@ -106,14 +108,14 @@ export function useBullBoxData(cycleNumber = 3) {
   const [retryInfo, setRetryInfo] = useState(null)
 
   useEffect(() => {
-    let cancelled = false
+    const cancelledRef = { current: false }
 
     async function loadData() {
       try {
         setLoading(true)
         setRetryInfo(null)
-        const result = await fetchBullBoxes(cycleNumber, makeRetryCallback(setRetryInfo))
-        if (!cancelled) {
+        const result = await fetchBullBoxes(cycleNumber, makeRetryCallback(setRetryInfo, cancelledRef))
+        if (!cancelledRef.current) {
           setLineData(result.lineData || [])
           setBoxes(result.boxes || [])
           setCycleInfo(result.cycleInfo || { startDate: '', endDate: '', maxDays: 0 })
@@ -122,13 +124,13 @@ export function useBullBoxData(cycleNumber = 3) {
           setRetryInfo(null)
         }
       } catch (err) {
-        if (!cancelled) setError(err.message)
+        if (!cancelledRef.current) setError(err.message)
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelledRef.current) setLoading(false)
       }
     }
     loadData()
-    return () => { cancelled = true }
+    return () => { cancelledRef.current = true }
   }, [cycleNumber])
 
   return { lineData, boxes, loading, error, cycleInfo, config, retryInfo }
@@ -141,26 +143,26 @@ export function useOhlcvData() {
   const [retryInfo, setRetryInfo] = useState(null)
 
   useEffect(() => {
-    let cancelled = false
+    const cancelledRef = { current: false }
 
     async function loadData() {
       try {
         setLoading(true)
         setRetryInfo(null)
-        const result = await fetchOhlcvData(makeRetryCallback(setRetryInfo))
-        if (!cancelled) {
+        const result = await fetchOhlcvData(makeRetryCallback(setRetryInfo, cancelledRef))
+        if (!cancelledRef.current) {
           setData(result.data || [])
           setError(null)
           setRetryInfo(null)
         }
       } catch (err) {
-        if (!cancelled) setError(err.message)
+        if (!cancelledRef.current) setError(err.message)
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelledRef.current) setLoading(false)
       }
     }
     loadData()
-    return () => { cancelled = true }
+    return () => { cancelledRef.current = true }
   }, [])
 
   return { data, loading, error, retryInfo }
