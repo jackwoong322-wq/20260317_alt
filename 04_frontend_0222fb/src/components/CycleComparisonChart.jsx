@@ -3,7 +3,7 @@ import { createChart } from 'lightweight-charts'
 import { useCycleComparisonData } from '../hooks/useChartData'
 import { CHART_THEME, COLORS, COLOR_NAMES } from '../utils/chartConstants'
 import { useResizeChart } from '../hooks/useResizeChart'
-import { ChartErrorState, ChartLoadingState } from './ChartStatus'
+import { ChartErrorState, ChartLoadingState, ChartWakingState } from './ChartStatus'
 import '../styles/Chart.css'
 
 function dayToDateString(day) {
@@ -13,7 +13,7 @@ function dayToDateString(day) {
 }
 
 export default function CycleComparisonChart({ onHeaderContent }) {
-  const { series, loading, error } = useCycleComparisonData()
+  const { series, loading, error, retryInfo } = useCycleComparisonData()
   const containerRef = useRef(null)
   const chartRef = useRef(null)
   const [hiddenSeries, setHiddenSeries] = useState(new Set())
@@ -155,15 +155,13 @@ export default function CycleComparisonChart({ onHeaderContent }) {
   }, [series, hiddenSeries])
 
   if (loading) {
+    const inner = retryInfo
+      ? <ChartWakingState attempt={retryInfo.attempt} maxRetries={retryInfo.maxRetries} />
+      : <ChartLoadingState title="데이터를 불러오는 중입니다..." message="사이클 비교 구간과 하락률 데이터를 준비하고 있습니다." />
     return (
       <div className="chart-page">
         <div className="chart-container">
-          <div className="chart-wrapper">
-            <ChartLoadingState
-              title="데이터를 불러오는 중입니다..."
-              message="사이클 비교 구간과 하락률 데이터를 준비하고 있습니다."
-            />
-          </div>
+          <div className="chart-wrapper">{inner}</div>
         </div>
       </div>
     )

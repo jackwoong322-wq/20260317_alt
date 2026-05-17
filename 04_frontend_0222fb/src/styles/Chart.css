@@ -1,6 +1,7 @@
 .chart-page {
+  flex: 1;
+  min-height: 0;
   width: 100%;
-  height: 100%;
   display: flex;
   flex-direction: column;
   background: transparent;
@@ -156,13 +157,15 @@
 
 .chart-area-fill {
   flex: 1;
-  min-height: 0;
+  min-height: 400px;
   width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .chart-area-compact {
   flex: 1;
-  min-height: 620px;
+  min-height: 300px;
 }
 
 .chart-toolbar-strip {
@@ -332,6 +335,82 @@
   color: var(--color-danger);
 }
 
+/* ── Render cold-start 재부팅 대기 UI ── */
+.waking-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 260px;
+  padding: var(--space-lg);
+  text-align: center;
+}
+
+.waking-spinner {
+  width: 48px;
+  height: 48px;
+  position: relative;
+}
+
+.waking-spinner-ring {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 3px solid rgba(191, 144, 35, 0.15);
+  border-top-color: var(--color-accent, #bfa023);
+  animation: waking-spin 1s linear infinite;
+}
+
+@keyframes waking-spin {
+  to { transform: rotate(360deg); }
+}
+
+.waking-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.waking-title {
+  font-size: var(--text-md);
+  color: var(--color-accent, #bfa023);
+}
+
+.waking-desc {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.waking-progress-wrap {
+  width: min(280px, 80%);
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.waking-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-accent, #bfa023);
+  transition: width 600ms ease;
+}
+
+.waking-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.waking-countdown {
+  color: var(--color-accent, #bfa023);
+  font-weight: 700;
+}
+
 @media (max-width: 980px) {
   .chart-container {
     padding: 12px;
@@ -437,6 +516,9 @@
 .chart-overlay-wrapper {
   position: relative;
   width: 100%;
-  overflow: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: visible; /* 이슈 #102: hidden → visible, 차트 하단 클리핑 수정 */
 }
 

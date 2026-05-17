@@ -3,7 +3,7 @@ import { createChart } from 'lightweight-charts'
 import { useBullBoxData } from '../hooks/useChartData'
 import { useResizeChart } from '../hooks/useResizeChart'
 import { CHART_THEME } from '../utils/chartConstants'
-import { ChartErrorState, ChartLoadingState } from './ChartStatus'
+import { ChartErrorState, ChartLoadingState, ChartWakingState } from './ChartStatus'
 import '../styles/Chart.css'
 
 function toDateString(timestamp) {
@@ -13,7 +13,7 @@ function toDateString(timestamp) {
 }
 
 export default function BullBoxChart({ cycleNumber = 3 }) {
-  const { lineData, boxes, loading, error, cycleInfo } = useBullBoxData(cycleNumber)
+  const { lineData, boxes, loading, error, cycleInfo, retryInfo } = useBullBoxData(cycleNumber)
   const containerRef = useRef(null)
   const chartRef = useRef(null)
 
@@ -146,6 +146,13 @@ export default function BullBoxChart({ cycleNumber = 3 }) {
   }, [lineData, boxes])
 
   if (loading) {
+    if (retryInfo) {
+      return (
+        <div className="chart-page"><div className="chart-container">
+          <ChartWakingState attempt={retryInfo.attempt} maxRetries={retryInfo.maxRetries} />
+        </div></div>
+      )
+    }
     return (
       <div className="chart-page"><div className="chart-container">
         <ChartLoadingState

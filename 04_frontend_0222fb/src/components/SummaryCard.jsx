@@ -1,18 +1,33 @@
 /**
  * SummaryCard.jsx
  * 대시보드 상단 현재 상태 요약 카드
- * Props: cycleNumber, positionPercent, nextPredictedPrice (선택적 직접 주입)
- * 데이터 소스: src/mocks/dashboardMock.js (VITE_API_URL 연결 성공 시 API로 교체)
- * Tailwind CSS 사용
+ *
+ * 데이터 소스: /api/bear-boxes?cycle=5 (현재 사이클 실데이터)
+ * 03_frontend와 동일한 엔드포인트 사용 → 동일한 결과 표시
  */
 
 import { useState, useEffect } from 'react'
 import SignalBadge from './SignalBadge'
-import { fetchDashboardSummary } from '../mocks/dashboardMock'
 
-function formatPrice(value) {
+const CURRENT_CYCLE = 5
+const CURRENT_CYCLE_LABEL = 'CURRENT CYCLE (2025)'
+
+const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+
+function formatRate(value) {
   if (value == null) return '—'
-  return '$' + Number(value).toLocaleString('en-US', { maximumFractionDigits: 0 })
+  return Number(value).toFixed(2) + 'x'
+}
+
+function calcPositionPercent(current, lo, hi) {
+  if (hi <= lo) return 0
+  return Math.max(0, Math.min(100, ((current - lo) / (hi - lo)) * 100))
+}
+
+function signalFromPercent(pct) {
+  if (pct < 30) return 'BUY'
+  if (pct < 70) return 'HOLD'
+  return 'SELL'
 }
 
 /** 위치 바: 고점~저점 사이 현재가 위치를 시각화 */
@@ -49,14 +64,7 @@ function PositionBar({ percent }) {
   )
 }
 
-/**
- * @param {{
- *   cycleNumber?: number,
- *   positionPercent?: number,
- *   nextPredictedPrice?: number,
- * }} props
- */
-export default function SummaryCard({ cycleNumber, positionPercent, nextPredictedPrice }) {
+export default function SummaryCard() {
   const [summary, setSummary] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -68,25 +76,34 @@ export default function SummaryCard({ cycleNumber, positionPercent, nextPredicte
       try {
         setIsLoading(true)
         setError(null)
-        let data
 
-        const apiBase = import.meta.env.VITE_API_URL
-        if (apiBase) {
-          try {
-            const res = await fetch(`${apiBase}/api/dashboard-summary`)
-            if (res.ok) {
-              data = await res.json()
-            } else {
-              throw new Error(`API ${res.status}`)
-            }
-          } catch {
-            data = await fetchDashboardSummary()
-          }
-        } else {
-          data = await fetchDashboardSummary()
+        // 03_frontend와 동일한 엔드포인트 사용
+        const res = await fetch(`${API_BASE}/api/bear-boxes?cycle=${CURRENT_CYCLE}`)
+        if (!res.ok) throw new Error(`API ${res.status}`)
+        const data = await res.json()
+
+        if (!cancelled) {
+          const lineData = data.lineData ?? []
+          const boxes = data.boxes ?? []
+          const predictions = data.predictions ?? []
+
+          const currentRate = lineData[lineData.length - 1]?.value ?? 0
+          const lastBox = boxes[boxes.length - 1]
+          const hiRate = lastBox?.Peak_Rate ?? 0
+          const loRate = lastBox?.Start_Rate ?? 0
+          const nextPredRate = predictions[0]?.Peak_Rate ?? null
+          const positionPercent = calcPositionPercent(currentRate, loRate, hiRate)
+
+          setSummary({
+            cycleLabel: CURRENT_CYCLE_LABEL,
+            currentRate,
+            hiRate,
+            loRate,
+            nextPredRate,
+            positionPercent,
+            signal: signalFromPercent(positionPercent),
+          })
         }
-
-        if (!cancelled) setSummary(data)
       } catch (err) {
         if (!cancelled) setError(err.message)
       } finally {
@@ -94,24 +111,9 @@ export default function SummaryCard({ cycleNumber, positionPercent, nextPredicte
       }
     }
 
-    // props로 직접 주입된 경우 API 호출 스킵
-    if (cycleNumber != null && positionPercent != null && nextPredictedPrice != null) {
-      setSummary({
-        cycleNumber,
-        positionPercent,
-        nextPredictedPrice,
-        signal: 'HOLD',
-        currentPrice: null,
-        highPrice: null,
-        lowPrice: null,
-      })
-      setIsLoading(false)
-    } else {
-      load()
-    }
-
+    load()
     return () => { cancelled = true }
-  }, [cycleNumber, positionPercent, nextPredictedPrice])
+  }, [])
 
   /* ── 로딩 상태 ── */
   if (isLoading) {
@@ -138,14 +140,14 @@ export default function SummaryCard({ cycleNumber, positionPercent, nextPredicte
       className="flex flex-col gap-4 p-4 sm:p-5 rounded-2xl border border-white/8 bg-chart-panel/90 shadow-lg backdrop-blur-sm"
       aria-label="현재 시장 상태 요약"
     >
-      {/* 헤더: 사이클 차수 + 신호 배지 */}
+      {/* 헤더: 사이클 라벨 + 신호 배지 */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-baseline gap-2">
           <span className="text-[10px] font-bold uppercase tracking-widest text-hold">
-            BTC 사이클
+            BTC
           </span>
-          <span className="text-2xl font-black tracking-tight text-accent">
-            #{summary.cycleNumber}
+          <span className="text-lg font-black tracking-tight text-accent">
+            {summary.cycleLabel}
           </span>
         </div>
         <SignalBadge signal={summary.signal} size="md" />
@@ -153,12 +155,12 @@ export default function SummaryCard({ cycleNumber, positionPercent, nextPredicte
 
       {/* 통계 격자 — 모바일 2열, 데스크탑 4열 */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-0 sm:divide-x sm:divide-white/8">
-        <StatItem label="현재가" value={formatPrice(summary.currentPrice)} highlight />
-        <StatItem label="사이클 고점" value={formatPrice(summary.highPrice)} />
-        <StatItem label="사이클 저점" value={formatPrice(summary.lowPrice)} />
+        <StatItem label="현재 Rate" value={formatRate(summary.currentRate)} highlight />
+        <StatItem label="사이클 고점" value={formatRate(summary.hiRate)} />
+        <StatItem label="사이클 저점" value={formatRate(summary.loRate)} />
         <StatItem
-          label="다음 예측가"
-          value={formatPrice(summary.nextPredictedPrice)}
+          label="다음 예측"
+          value={formatRate(summary.nextPredRate)}
           className="text-accent"
         />
       </div>
