@@ -25,11 +25,10 @@ export default function BearBoxTooltip({ tooltipState }) {
 
   return (
     <div
-      className="chart-tooltip chart-tooltip--bearbox"
+      className={`chart-tooltip chart-tooltip--bearbox${visible ? ' chart-tooltip--visible' : ''}`}
       style={{
         left: x,
         top: y,
-        visibility: visible ? 'visible' : 'hidden',
         pointerEvents: 'none',
       }}
       role="tooltip"

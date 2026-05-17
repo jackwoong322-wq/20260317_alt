@@ -20,11 +20,10 @@ export default function ChartTooltip({ tooltipState }) {
 
   return (
     <div
-      className="chart-tooltip"
+      className={`chart-tooltip${visible ? ' chart-tooltip--visible' : ''}`}
       style={{
         left: x,
         top: y,
-        visibility: visible ? 'visible' : 'hidden',
         pointerEvents: 'none',
       }}
       role="tooltip"

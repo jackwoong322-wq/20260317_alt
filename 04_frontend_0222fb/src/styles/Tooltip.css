@@ -1,5 +1,6 @@
 /* ── Tooltip.css — HTML 오버레이 툴팁 전용 스타일 ─────────────────── */
 
+/* ── 툴팁 기본 (숨김 상태) ─────────────────────────────────────── */
 .chart-tooltip {
   position: absolute;
   z-index: 20;
@@ -15,20 +16,18 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   overflow: hidden;
-
-  /* 등장 애니메이션 */
-  animation: tooltip-appear 120ms ease forwards;
+  /* BUG-08: visibility:hidden 기본값, 등장 시 클래스로 애니메이션 */
+  opacity: 0;
+  transform: translateY(-4px) scale(0.97);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
 }
 
-@keyframes tooltip-appear {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+/* 등장 상태 (tooltipState 있을 때) */
+.chart-tooltip.chart-tooltip--visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 /* ── 헤더 (날짜) ─────────────────────────────────────────────────── */

@@ -11,12 +11,13 @@ import ChartTooltip from '../components/ChartTooltip'
 // ── ChartTooltip 렌더링 테스트 ────────────────────────────────────────
 
 describe('[QA] ChartTooltip — 렌더링', () => {
-  it('tooltipState가 null이면 DOM은 유지되지만 visibility:hidden으로 숨겨진다 (BUG-05)', () => {
+  it('tooltipState가 null이면 DOM은 유지되지만 --visible 클래스가 없다 (BUG-05/BUG-08)', () => {
     const { container } = render(<ChartTooltip tooltipState={null} />)
     const el = container.querySelector('.chart-tooltip')
-    // BUG-05: aria-live 호환을 위해 DOM 유지, visibility로 숨김
+    // BUG-05: aria-live 호환을 위해 DOM 유지
+    // BUG-08: visibility 대신 opacity/transform transition 방식
     expect(el).not.toBeNull()
-    expect(el.style.visibility).toBe('hidden')
+    expect(el.classList.contains('chart-tooltip--visible')).toBe(false)
     expect(el.getAttribute('aria-hidden')).toBe('true')
   })
 
