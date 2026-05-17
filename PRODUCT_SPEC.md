@@ -1,6 +1,7 @@
-# 대시보드 2.0 — 제품 기획서 (PRODUCT_SPEC.md)
+# 대시보드 2.0 — 제품 기획서 (PRODUCT_SPEC.md) v2
 
-> 작성: PM 에이전트 | 버전: 1.0 | 날짜: 2026-05-17 | 상태: **FROZEN**
+> 작성: PM 에이전트 | 버전: 2.0 | 날짜: 2026-05-17 | 상태: **FROZEN**
+> 변경: v1 → v2 — 03_frontend 포팅 요구사항 추가, TypeScript 스펙 명시
 
 ---
 
@@ -9,6 +10,8 @@
 비트코인 사이클 분석 대시보드를 "단순 차트 뷰어"에서 **인터랙티브 분석 플랫폼**으로 격상한다.  
 사용자는 차트 위에서 마우스를 움직이는 것만으로 각 사이클의 핵심 지표를 즉시 파악하고,  
 모바일(375px)에서 데스크탑(1440px)까지 끊김 없는 경험을 제공한다.
+
+**v2 추가**: `04_frontend`(JavaScript)와 `03_frontend`(TypeScript) 두 프로젝트 간 기능 패리티(Feature Parity)를 확보한다.
 
 ---
 
@@ -22,64 +25,87 @@
 
 ---
 
-## 3. 기능 목록 (이번 스프린트 범위)
+## 3. 기능 목록 (전체 스프린트 범위)
 
 ### P0 — 반드시 구현 (MVP 차단)
-| ID | 기능 | 설명 |
-|---|---|---|
-| F-01 | HTML 오버레이 툴팁 | lightweight-charts 캔버스 위에 HTML 레이어를 덮어 마우스 위치 기반 툴팁 표시 |
-| F-02 | 크로스헤어 툴팁 데이터 | 사이클 비교 차트: 마우스 위치의 날짜·각 사이클 값·등락률 표시 |
-| F-03 | Bear Box 툴팁 | BearBoxChart: 박스 레이블(H/L 넘버), 현재가, 거리(%), 예측 도달 날짜 표시 |
+| ID | 기능 | 04_frontend | 03_frontend |
+|---|---|---|---|
+| F-01 | HTML 오버레이 툴팁 | ✅ | ⬜ 포팅 필요 |
+| F-02 | 크로스헤어 툴팁 데이터 | ✅ | ⬜ 포팅 필요 |
+| F-03 | Bear/Bull Box 툴팁 | ✅ | ⬜ 포팅 필요 |
 
 ### P1 — 중요 (스프린트 내 완성 목표)
-| ID | 기능 | 설명 |
-|---|---|---|
-| F-04 | 모바일 375px 적응 | 차트 잘림 없이 전체 표시, 사이드바 오버레이 |
-| F-05 | 다크/라이트 테마 토글 | 헤더 우측 버튼으로 전환, 로컬스토리지 저장 |
-| F-06 | 차트 로딩 스켈레톤 | 데이터 로딩 중 차트 영역에 펄스 애니메이션 스켈레톤 표시 |
+| ID | 기능 | 04_frontend | 03_frontend |
+|---|---|---|---|
+| F-04 | 모바일 375px 적응 | ✅ | ⬜ 포팅 필요 |
+| F-05 | 다크/라이트 테마 토글 | ✅ | ⬜ 포팅 필요 |
+| F-06 | 차트 로딩 스켈레톤 | ✅ | ⬜ 포팅 필요 |
 
-### P2 — 개선 (여유 시 포함)
-| ID | 기능 | 설명 |
+### P2 — 개선
+| ID | 기능 | 04_frontend | 03_frontend |
+|---|---|---|---|
+| F-07 | 사이클 전환 애니메이션 | ✅ | ⬜ |
+| F-08 | PNG 내보내기 | ✅ | ⬜ 포팅 필요 |
+
+### TECH — 엔지니어링
+| ID | 기능 | 상태 |
 |---|---|---|
-| F-07 | 사이클 전환 애니메이션 | 사이클 클릭 시 차트 페이드인 전환 |
-| F-08 | 인쇄/PDF 내보내기 | 현재 차트 뷰 PNG 저장 버튼 |
+| TECH-01 | BullBox 툴팁 | ✅ |
+| TECH-02 | Playwright E2E | ⚠️ 파일만 있음 |
+| TECH-03 | 커버리지 임계값 | ✅ |
+| TECH-04 | 03_frontend 테스트 확충 | ⬜ 필요 |
 
 ---
 
-## 4. 수락 기준 (Acceptance Criteria)
+## 4. 수락 기준 (Acceptance Criteria) v2
 
-### F-01/02/03 HTML 오버레이 툴팁
-- [ ] 마우스를 차트 위에 올리면 500ms 이내에 툴팁이 나타난다
-- [ ] 툴팁은 차트 캔버스 바깥으로 벗어나지 않는다 (뷰포트 클리핑 방지)
-- [ ] 툴팁 내용: 날짜(Day N), 현재값(%), 이전 사이클 대비 차이(±pp)
-- [ ] 마우스가 차트를 벗어나면 툴팁이 사라진다
+### 04_frontend (JavaScript)
+- [x] 모든 차트에 HTML 오버레이 툴팁 동작
+- [x] 테마 토글 (localStorage 영속)
+- [x] 스켈레톤 로딩
+- [x] PNG 내보내기 (전 3개 차트)
+- [x] 76개 유닛 테스트 통과
+- [ ] Playwright E2E 실행 가능 상태
 
-### F-04 모바일
-- [ ] 375px 뷰포트에서 가로 스크롤이 발생하지 않는다
-- [ ] 차트가 뷰포트 안에 완전히 표시된다 (잘림 없음)
+### 03_frontend (TypeScript)
+- [ ] `useChartExport.ts` — TypeScript 포팅
+- [ ] `useTheme.ts` — TypeScript 포팅  
+- [ ] `ChartTooltip.tsx` — HTML 오버레이 툴팁
+- [ ] `ChartSkeleton.tsx` — 스켈레톤 로딩
+- [ ] 40개 이상 유닛 테스트
 
 ---
 
 ## 5. 기술 제약
 
-- **프레임워크**: React 18 + Vite 5 (JavaScript)
-- **차트 라이브러리**: `lightweight-charts` v4.x (캔버스 기반)
-- **스타일**: Tailwind CSS + CSS Modules 혼용
-- **API**: `VITE_API_URL` 환경 변수 필수 (하드코딩 금지)
-- **목 데이터**: 백엔드 미연결 시 `src/mocks/dashboardMock.js` 활용
+### 공통
+- **API**: `VITE_API_URL` 환경 변수 (하드코딩 절대 금지)
+- **목 데이터**: 백엔드 미연결 시 `src/mocks/dashboardMock.[js|ts]` 활용
 - **테스트**: Vitest (유닛), Playwright (시각 검증)
 
+### 04_frontend (JavaScript)
+- React 18 + Vite 5 (JS/JSX)
+- lightweight-charts v4.x
+- CSS 변수 + OKLCH 색상 시스템
+
+### 03_frontend (TypeScript)
+- React 18 + Vite 5 (TS/TSX)
+- TypeScript strict mode
+- 인라인 스타일 (CSSProperties) — CSS 모듈 없음
+
 ---
 
-## 6. 마일스톤
+## 6. 마일스톤 (100회 루프)
 
-| 회차 | 단계 | 담당 |
-|---|---|---|
-| 1~3 | 기획-설계 동기화 | PM + Tech Lead |
-| 4~15 | 기능 개발 + 피어 리뷰 | Developer + Tech Lead |
-| 16~27 | QA 검증 + 버그 수정 | QA + Developer |
-| 28~30 | 릴리즈 + 회고 | PM 주도 전원 |
+| 회차 | 단계 | 담당 | 목표 |
+|---|---|---|---|
+| 1~10 | 기획-설계 동기화 v2 | PM + Tech Lead | PRODUCT_SPEC v2, ARCHITECTURE v2 FROZEN |
+| 11~40 | 03_frontend 포팅 | Developer | TypeScript 훅/컴포넌트 완성 |
+| 41~60 | 04_frontend 고도화 | Developer + Tech Lead | 코드 품질, 성능 |
+| 61~80 | QA 강화 | QA + Developer | 80+케이스, Playwright 실행 |
+| 81~95 | 성능+접근성 감사 | Tech Lead + Developer | Lighthouse 기준 |
+| 96~100 | 릴리즈 + 회고 | PM 주도 전원 | CREW REPORT v3, 배포 태그 |
 
 ---
 
-*PM 에이전트 서명: 본 기획서는 Tech Lead 동의 후 FROZEN 처리됨.*
+*PM 에이전트 서명: v2 기획서 배포 — Tech Lead 검토 대기*
