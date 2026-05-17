@@ -5,6 +5,7 @@ import { useResizeChart } from '../hooks/useResizeChart'
 import { CHART_THEME } from '../utils/chartConstants'
 import { ChartErrorState, ChartLoadingState, ChartWakingState } from './ChartStatus'
 import { useBullBoxTooltip } from '../hooks/useBullBoxTooltip'
+import { useChartExport } from '../hooks/useChartExport'
 import BearBoxTooltip from './BearBoxTooltip'   // 동일 UI 재사용
 import '../styles/Chart.css'
 
@@ -34,6 +35,9 @@ export default function BullBoxChart({ cycleNumber = 3 }) {
     containerRef,
     boxes,
   })
+
+  // F-08: PNG 내보내기
+  const { exportPng, exporting } = useChartExport(chartRef, `btc-bull-cycle${cycleNumber}`)
 
   useEffect(() => {
     if (!containerRef.current || lineData.length === 0) return
@@ -211,7 +215,18 @@ export default function BullBoxChart({ cycleNumber = 3 }) {
               &nbsp;|&nbsp;
               <strong className="chart-strong-info">총 기간:</strong> {cycleInfo.maxDays}일
             </span>
-            <span>Data: Supabase cycle data</span>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <span>Data: Supabase cycle data</span>
+              <button
+                className="chart-export-btn"
+                onClick={exportPng}
+                disabled={exporting}
+                title="차트를 PNG로 저장"
+                aria-label="BullBox 차트 PNG 내보내기"
+              >
+                {exporting ? '저장 중...' : '📥 PNG'}
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -11,9 +11,13 @@ import ChartTooltip from '../components/ChartTooltip'
 // ── ChartTooltip 렌더링 테스트 ────────────────────────────────────────
 
 describe('[QA] ChartTooltip — 렌더링', () => {
-  it('tooltipState가 null이면 아무것도 렌더링하지 않는다', () => {
+  it('tooltipState가 null이면 DOM은 유지되지만 visibility:hidden으로 숨겨진다 (BUG-05)', () => {
     const { container } = render(<ChartTooltip tooltipState={null} />)
-    expect(container.firstChild).toBeNull()
+    const el = container.querySelector('.chart-tooltip')
+    // BUG-05: aria-live 호환을 위해 DOM 유지, visibility로 숨김
+    expect(el).not.toBeNull()
+    expect(el.style.visibility).toBe('hidden')
+    expect(el.getAttribute('aria-hidden')).toBe('true')
   })
 
   it('tooltipState가 있으면 날짜 레이블을 표시한다', () => {

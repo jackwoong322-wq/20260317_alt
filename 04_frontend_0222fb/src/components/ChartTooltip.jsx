@@ -6,21 +6,30 @@
  *   - 데이터 가공 없음 — useChartTooltip 훅에서 받은 상태 그대로 렌더링
  *   - 스타일: Tooltip.css 전용 클래스 사용
  *
+ * BUG-05 수정: null 시 언마운트 → visibility:hidden으로 DOM 유지
+ * 이유: aria-live는 이미 마운트된 요소의 변경만 감지함.
+ * 언마운트/리마운트를 반복하면 스크린 리더에 고지되지 않음.
+ *
  * @param {{ tooltipState: { x: number, y: number, dayLabel: string, items: Array } | null }} props
  */
 import '../styles/Tooltip.css'
 
 export default function ChartTooltip({ tooltipState }) {
-  if (!tooltipState) return null
-
-  const { x, y, dayLabel, items } = tooltipState
+  const visible = !!tooltipState
+  const { x = 0, y = 0, dayLabel = '', items = [] } = tooltipState ?? {}
 
   return (
     <div
       className="chart-tooltip"
-      style={{ left: x, top: y }}
+      style={{
+        left: x,
+        top: y,
+        visibility: visible ? 'visible' : 'hidden',
+        pointerEvents: 'none',
+      }}
       role="tooltip"
       aria-live="polite"
+      aria-hidden={!visible}
     >
       {/* 날짜 헤더 */}
       <div className="chart-tooltip__header">

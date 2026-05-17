@@ -5,6 +5,7 @@ import { useResizeChart } from '../hooks/useResizeChart'
 import { CHART_THEME } from '../utils/chartConstants'
 import { ChartErrorState, ChartLoadingState, ChartWakingState } from './ChartStatus'
 import { useBearBoxTooltip } from '../hooks/useBearBoxTooltip'
+import { useChartExport } from '../hooks/useChartExport'
 import BearBoxTooltip from './BearBoxTooltip'
 import '../styles/Chart.css'
 
@@ -35,6 +36,9 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
     boxes,
     predictions,
   })
+
+  // F-08: PNG 내보내기
+  const { exportPng, exporting } = useChartExport(chartRef, `btc-bear-cycle${cycleNumber}`)
 
   useEffect(() => {
     if (!containerRef.current || lineData.length === 0) return
@@ -402,6 +406,15 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
               <strong className="chart-strong-danger">기간:</strong> 0~400일
             </span>
             <span>Data: Supabase cycle data</span>
+            <button
+              className="chart-export-btn"
+              onClick={exportPng}
+              disabled={exporting}
+              title="차트를 PNG로 저장"
+              aria-label="BearBox 차트 PNG 내보내기"
+            >
+              {exporting ? '저장 중...' : '📥 PNG'}
+            </button>
           </div>
         </div>
       </div>

@@ -35,13 +35,18 @@ export default function CycleComparisonChart({ onHeaderContent }) {
   })
 
   // ── 툴팁 훅 통합 ────────────────────────────────────────────────
-  const seriesListForTooltip = series
-    .map((item, idx) => ({
-      name: item.name,
-      color: COLORS[idx % COLORS.length],
-      seriesRef: seriesRefsRef.current[idx] ?? { current: null },
-    }))
-    .filter((_, idx) => !hiddenSeries.has(series[idx]?.name))
+  // useMemo: seriesList가 렌더마다 재생성되면 handleCrosshairMove가 무한 재구독됨 (BUG-04)
+  const seriesListForTooltip = useMemo(
+    () =>
+      series
+        .map((item, idx) => ({
+          name: item.name,
+          color: COLORS[idx % COLORS.length],
+          seriesRef: seriesRefsRef.current[idx] ?? { current: null },
+        }))
+        .filter((_, idx) => !hiddenSeries.has(series[idx]?.name)),
+    [series, hiddenSeries]
+  )
 
   const { tooltipState } = useChartTooltip(chartRef, seriesListForTooltip, containerRef)
 
