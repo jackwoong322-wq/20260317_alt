@@ -136,3 +136,29 @@
     font-size: 11px;
   }
 }
+
+/* ── BearBoxTooltip 전용 ─────────────────────────────────────────── */
+
+/* 구분선 */
+.chart-tooltip__divider {
+  height: 1px;
+  margin: 4px 0;
+  background: color-mix(in srgb, var(--color-border) 60%, transparent);
+}
+
+/* 예측 도달 날짜 행 */
+.chart-tooltip__pred-date {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 2px 1px;
+  font-size: 10px;
+  color: var(--color-accent);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.chart-tooltip__pred-icon {
+  font-size: 11px;
+  line-height: 1;
+}

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { createChart } from 'lightweight-charts'
 import { useBearBoxData } from '../hooks/useChartData'
 import { useResizeChart } from '../hooks/useResizeChart'
 import { CHART_THEME } from '../utils/chartConstants'
 import { ChartErrorState, ChartLoadingState, ChartWakingState } from './ChartStatus'
-import ChartOverlay from './ChartOverlay'
+import { useBearBoxTooltip } from '../hooks/useBearBoxTooltip'
+import BearBoxTooltip from './BearBoxTooltip'
 import '../styles/Chart.css'
 
 function toDateString(timestamp) {
@@ -17,14 +18,22 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
   const { lineData, boxes, predictions, loading, error, retryInfo } = useBearBoxData(cycleNumber)
   const containerRef = useRef(null)
   const chartRef = useRef(null)
-  // ChartOverlay에 전달할 박스 H/L 가격 배열
-  const [boxZones, setBoxZones] = useState([])
+  const mainSeriesRef = useRef(null)  // F-03 툴팁용 메인 시리즈 ref
 
   const resizeLayoutKey = !loading && !error && lineData.length > 0 ? lineData.length : 0
 
   useResizeChart(containerRef, [chartRef], {
     watchHeight: true,
     layoutKey: resizeLayoutKey,
+  })
+
+  // F-03: BearBox 전용 HTML 툴팁
+  const { tooltipState } = useBearBoxTooltip({
+    chartRef,
+    mainSeriesRef,
+    containerRef,
+    boxes,
+    predictions,
   })
 
   useEffect(() => {
@@ -103,6 +112,7 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
       priceLineVisible: false,
       lastValueVisible: false,
     })
+    mainSeriesRef.current = lineSeries  // F-03 툴팁용 ref 등록
 
     const chartData = lineData
       .filter((item) => item.timestamp)
@@ -111,17 +121,6 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
 
     lineSeries.setData(chartData)
 
-    // ChartOverlay용 박스 H/L 좌표 배열 갱신
-    const zoneList = boxes.map((box) => ({
-      hi: box.Peak_Rate,
-      lo: box.Start_Rate,
-    }))
-    if (predictions.length > 0) {
-      predictions.forEach((pred) => {
-        zoneList.push({ hi: pred.Peak_Rate, lo: pred.Start_Rate })
-      })
-    }
-    setBoxZones(zoneList)
 
     const boxMarkers = []
     boxes.forEach((box, idx) => {
@@ -324,10 +323,10 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
       }
     }
 
+    // cleanup
     return () => {
-      try {
-        chartRef.current?.remove()
-      } catch (_) {}
+      mainSeriesRef.current = null
+      try { chartRef.current?.remove() } catch (_) {}
       chartRef.current = null
     }
   }, [lineData, boxes, predictions])
@@ -377,9 +376,10 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
             </p>
           </div>
 
-          <div className="chart-overlay-wrapper">
+          <div className="chart-overlay-wrapper" style={{ position: 'relative' }}>
             <div ref={containerRef} className="chart-area chart-area-fill" />
-            <ChartOverlay chartRef={chartRef} boxZones={boxZones} />
+            {/* F-03: HTML 오버레이 툴팁 */}
+            <BearBoxTooltip tooltipState={tooltipState} />
           </div>
 
           <div className="chart-footer chart-footer-row">
