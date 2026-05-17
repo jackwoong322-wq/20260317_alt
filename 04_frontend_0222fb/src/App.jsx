@@ -1,13 +1,16 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import './styles/App.css'
-import CycleComparisonChart from './components/CycleComparisonChart'
-import BearBoxChart from './components/BearBoxChart'
-import BullBoxChart from './components/BullBoxChart'
-import TradingChart from './components/TradingChart'
 import SidebarNavigation from './components/layout/SidebarNavigation'
 import SummaryCard from './components/SummaryCard'
+import ChartSkeleton from './components/ChartSkeleton'
 import { fetchCycleMenu } from './lib/api'
 import { useTheme } from './hooks/useTheme'
+
+// 차트 컴포넌트 lazy loading — 초기 번들 분리 (F-06 Suspense 통합)
+const CycleComparisonChart = lazy(() => import('./components/CycleComparisonChart'))
+const BearBoxChart = lazy(() => import('./components/BearBoxChart'))
+const BullBoxChart = lazy(() => import('./components/BullBoxChart'))
+const TradingChart = lazy(() => import('./components/TradingChart'))
 
 const FALLBACK_BEAR_CYCLES = [
   { id: 'bear1', label: 'Cycle 1 (2013.12)', cycleNumber: 1 },
@@ -180,7 +183,9 @@ function App() {
           <SummaryCard />
         </div>
         <section key={selectedChart} className="chart-shell">
-          {renderChart()}
+          <Suspense fallback={<ChartSkeleton type="line" />}>
+            {renderChart()}
+          </Suspense>
         </section>
       </main>
     </div>
