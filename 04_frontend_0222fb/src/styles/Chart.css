@@ -522,3 +522,139 @@
   overflow: visible; /* 이슈 #102: hidden → visible, 차트 하단 클리핑 수정 */
 }
 
+/* ── F-06: ChartSkeleton ────────────────────────────────────────────── */
+
+/* 공통 펄스 애니메이션 */
+@keyframes skel-shimmer {
+  0%   { opacity: 0.45; }
+  50%  { opacity: 0.15; }
+  100% { opacity: 0.45; }
+}
+
+.skel-pulse {
+  background: var(--color-border);
+  border-radius: 6px;
+  animation: skel-shimmer 1.6s ease-in-out infinite;
+}
+
+/* 스크린 리더 전용 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 스켈레톤 컨테이너 */
+.chart-skeleton {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--space-md);
+  gap: var(--space-sm);
+}
+
+/* 타이틀 스트립 */
+.chart-skeleton__title-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: var(--space-sm) var(--space-md) var(--space-sm);
+}
+
+.chart-skeleton__kicker  { height: 12px; width: 80px; }
+.chart-skeleton__heading { height: 20px; width: 220px; }
+.chart-skeleton__copy    { height: 11px; width: 340px; max-width: 90%; }
+
+/* 캔버스 영역 */
+.chart-skeleton__canvas {
+  flex: 1;
+  display: flex;
+  gap: var(--space-sm);
+  min-height: 200px;
+}
+
+/* Y축 */
+.chart-skeleton__y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px 0;
+  width: 40px;
+}
+
+.chart-skeleton__y-label {
+  height: 10px;
+  width: 100%;
+}
+
+/* 플롯 영역 */
+.chart-skeleton__plot {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* SVG 라인 애니메이션 */
+.chart-skeleton__svg {
+  flex: 1;
+  width: 100%;
+}
+
+.chart-skeleton__line {
+  animation: skel-shimmer 1.6s ease-in-out infinite;
+}
+
+.chart-skeleton__line--secondary {
+  animation-delay: 0.4s;
+}
+
+/* 밴드 (박스 차트용) */
+.chart-skeleton__bands {
+  flex: 1;
+  position: relative;
+}
+
+.chart-skeleton__band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 12px;
+  border-radius: 4px;
+  transform: translateY(-50%);
+}
+
+/* X축 */
+.chart-skeleton__x-axis {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0 0;
+  height: 24px;
+}
+
+.chart-skeleton__x-label {
+  height: 10px;
+  width: 50px;
+}
+
+/* 푸터 */
+.chart-skeleton__footer {
+  padding: var(--space-xs) var(--space-md);
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.chart-skeleton__footer-text {
+  height: 10px;
+  width: 180px;
+}

@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
+import ChartSkeleton from './ChartSkeleton'
 import '../styles/Chart.css'
 
-export function ChartLoadingState({ title, message }) {
-  return (
-    <div className="loading-container" role="status" aria-live="polite">
-      <strong>{title}</strong>
-      <span>{message}</span>
-    </div>
-  )
+/**
+ * ChartLoadingState — F-06 이후 ChartSkeleton으로 위임
+ * type prop을 전달하면 라인/박스 형태가 선택됨
+ */
+export function ChartLoadingState({ title, message, type = 'line' }) {
+  return <ChartSkeleton type={type} />
 }
 
 export function ChartErrorState({ title, message }) {

@@ -348,6 +348,7 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
         <ChartLoadingState
           title="데이터를 불러오는 중입니다..."
           message="Bear Market Box와 예측 구간을 준비하고 있습니다."
+          type="bar"
         />
       </div></div>
     )
