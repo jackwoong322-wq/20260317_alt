@@ -987,7 +987,8 @@ def _predict_one_coin_phase2(conn: Any, bundle: dict):
                                 str(last["symbol"]),
                                 max_cyc,
                                 "bull",
-                                bull_meta["bull_start"],
+                                # bridge 포인트: day_x=bear_end_day < bull_start 가능 → start_x 조정
+                                min(bull_meta["bull_start"], bear_end_day),
                                 bull_meta["bull_end"],
                                 bear_end_day,
                                 bear_end_val,
@@ -1038,7 +1039,8 @@ def _predict_one_coin_phase2(conn: Any, bundle: dict):
                     str(last["symbol"]),
                     max_cyc,
                     "bull",
-                    bull_meta["bull_start"],
+                    # bridge 포인트: day_x=bear_end_day < bull_start 가능 → start_x 조정
+                    min(bull_meta["bull_start"], bear_end_day),
                     bull_meta["bull_end"],
                     bear_end_day,
                     bear_end_val,
