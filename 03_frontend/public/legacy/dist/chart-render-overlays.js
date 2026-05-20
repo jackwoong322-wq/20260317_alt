@@ -792,8 +792,9 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
     if (chartState.showPrediction && cycleRef && cycleRef.peak_predictions && cycleRef.peak_predictions.length > 0) {
         cycleRef.peak_predictions.forEach((p) => {
             const dayX = p.day_x;
-            if (!isVisiblePredictionDay(dayX))
-                return;
+            // [Fix] path 라인과 동일하게 peak/bottom 마커도 visible 범위 필터 없이 항상 표시
+            //if (!isVisiblePredictionDay(dayX))
+            //    return;
             if (p.value == null || !Number.isFinite(p.value))
                 return;
             let val = p.value;
@@ -852,7 +853,7 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
         const bearPts = cycleRef.prediction_paths.bear || [];
         if (bullPts && bullPts.length > 1) {
             const lastU = bullPts[bullPts.length - 1];
-            if (lastU && lastU.value != null && Number.isFinite(lastU.value) && isVisiblePredictionDay(lastU.x)) {
+            if (lastU && lastU.value != null && Number.isFinite(lastU.value)) {
                 const xU = timeScale.timeToCoordinate(dayToTime(lastU.x));
                 if (xU == null)
                     return;
@@ -871,7 +872,7 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
         }
         if (bearPts && bearPts.length > 1) {
             const lastB = bearPts[bearPts.length - 1];
-            if (lastB && lastB.value != null && Number.isFinite(lastB.value) && isVisiblePredictionDay(lastB.x)) {
+            if (lastB && lastB.value != null && Number.isFinite(lastB.value)) {
                 const xEnd = timeScale.timeToCoordinate(dayToTime(lastB.x));
                 if (xEnd == null)
                     return;
