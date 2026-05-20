@@ -151,7 +151,7 @@
   flex: 1;
   width: 100%;
   min-width: 0;
-  min-height: 520px;
+  min-height: clamp(220px, 38vh, 520px);
 }
 
 .chart-area-fill {
@@ -162,7 +162,7 @@
 
 .chart-area-compact {
   flex: 1;
-  min-height: 620px;
+  min-height: clamp(240px, 42vh, 620px);
 }
 
 .chart-toolbar-strip {
@@ -340,7 +340,7 @@
 
 @media (max-width: 720px) {
   .chart-area {
-    min-height: 420px;
+    min-height: clamp(200px, 35vh, 420px);
   }
 
   .chart-footer {
@@ -370,7 +370,7 @@
   }
 
   .chart-area {
-    min-height: 360px;
+    min-height: clamp(180px, 32vh, 360px);
   }
 
   .indicator-toggle-group {

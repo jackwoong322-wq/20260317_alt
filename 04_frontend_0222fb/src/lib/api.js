@@ -17,16 +17,11 @@ function formatApiDetail(detail) {
 
 /*
  * API base URL rules
- * - In local Vite dev, prefer `VITE_API_LOCAL_URL` and fall back to the
- *   local backend server.
- * - In deployed frontend environments, prefer `VITE_API_URL`.
+ * - VITE_API_URL 환경변수를 우선 사용 (.env.local → .env.development 순서)
+ * - 없으면 로컬 백엔드 기본값(http://127.0.0.1:8000) 사용
  */
 function resolveApiBaseUrl() {
-  const envUrl = import.meta.env.VITE_API_URL
-  if (import.meta.env.DEV) {
-    return import.meta.env.VITE_API_LOCAL_URL || 'http://127.0.0.1:8000'
-  }
-  return envUrl || 'http://127.0.0.1:8000'
+  return import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 }
 
 let API_BASE_URL = resolveApiBaseUrl()
