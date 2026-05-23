@@ -17,16 +17,14 @@ function formatApiDetail(detail) {
 
 /*
  * API base URL rules
- * - In local Vite dev, prefer `VITE_API_LOCAL_URL` and fall back to the
- *   local backend server.
- * - In deployed frontend environments, prefer `VITE_API_URL`.
+ * - 로컬 개발 시(localhost/127.0.0.1) 로컬 백엔드 기본값(http://localhost:8000) 강제 사용
+ * - 그 외 환경은 VITE_API_URL 환경변수를 사용하고 없으면 기본값 사용
  */
 function resolveApiBaseUrl() {
-  const envUrl = import.meta.env.VITE_API_URL
-  if (import.meta.env.DEV) {
-    return import.meta.env.VITE_API_LOCAL_URL || 'http://127.0.0.1:8000'
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://localhost:8000'
   }
-  return envUrl || 'http://127.0.0.1:8000'
+  return import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 }
 
 let API_BASE_URL = resolveApiBaseUrl()
@@ -73,4 +71,9 @@ export async function fetchOhlcvData() {
 /* Sidebar cycle list for Bear/Bull navigation */
 export async function fetchCycleMenu() {
   return apiFetch('/api/cycle-menu')
+}
+
+/* BTC 투자 신호 — ACCUMULATE/WATCH/CAUTION/EXIT */
+export async function fetchBtcSignal() {
+  return apiFetch('/api/btc-signal')
 }

@@ -41,7 +41,10 @@ def build_bull_box_day_points(
 
     # 첫 박스만: 시작점 = Bottom (날자, 값 일치하는 지점)
     if box_i == 0 and chain_val is not None:
-        path_rows.append((coin_id, str(last["symbol"]), max_cyc, "bull", b_start, b_end, chain_day, chain_val))
+        # bottom 시작점: day_x = chain_day(=bottom_day), b_start = bottom_day+1 이어서
+        # day_x < start_x 가 될 수 있음 → start_x를 min(chain_day, b_start)으로 조정
+        _bottom_start_x = min(chain_day, b_start)
+        path_rows.append((coin_id, str(last["symbol"]), max_cyc, "bull", _bottom_start_x, b_end, chain_day, chain_val))
         # Bottom → 고점 구간: (chain_day, chain_val)에서 (bull_hi_day, bull_hi)까지 곡선으로 상승
         if chain_day < bull_hi_day:
             seg0_days = max(1, bull_hi_day - chain_day)

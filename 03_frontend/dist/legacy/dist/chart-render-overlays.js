@@ -228,6 +228,10 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
         placed.push(getLabelRectInOverlay(el));
     }
     function addForecastGuide(day, label, kind) {
+        // overlay는 renderBoxMarks 외부 스코프에서 null 체크됐으나,
+        // 중첩 함수 내에서는 TS 타입 내로잉이 전파되지 않으므로 명시적으로 확인
+        if (!overlay)
+            return;
         const dayNum = Number(day);
         if (!Number.isFinite(dayNum)) {
             return;
@@ -285,15 +289,16 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             const isActive = (result === 'BEAR_ACTIVE' || result === 'BULL_ACTIVE' ||
                 result === 'PRED_BEAR_ACTIVE' || result === 'PRED_BULL_ACTIVE');
             const isActiveBear = result === 'BEAR_ACTIVE' || result === 'PRED_BEAR_ACTIVE';
-            const prevBox = zones[zi - 1] || null;
-            const refHighForLow = isBear ? (prevBox ? prevBox.hi : 100) : z.hi;
-            const refLowForHigh = isBear
-                ? z.lo
-                : zi === firstBullZi && cycleLow != null
-                    ? cycleLow
-                    : prevBox
-                        ? prevBox.lo
-                        : 100;
+            // [Fix] boxIndex 기반으로 정확한 이전 박스를 탐색 (zi-1은 필터 스킵으로 틀릴 수 있음)
+            const curBoxIdx = z.boxIndex != null ? Number(z.boxIndex) : zi;
+            const prevBox = zones.slice(0, zi).reverse().find((bz) => {
+                const bIdx = bz.boxIndex != null ? Number(bz.boxIndex) : null;
+                return bIdx != null ? bIdx === curBoxIdx - 1 : false;
+            }) ||
+                zones[zi - 1] ||
+                null;
+            const refHighForLow = prevBox ? prevBox.hi : 100;
+            const refLowForHigh = z.lo;
             let hiDay, loDay;
             if (isPrediction) {
                 const dur = z.endX - z.startX;
@@ -422,14 +427,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             const prevHighDay = prevBox ? findBoxExtremeDay(prevBox, 'high') : null;
             const prevLowDay = prevBox ? findBoxExtremeDay(prevBox, 'low') : null;
             const cycleLowDay = cycleData[cycleLowIdx]?.x ?? null;
-            const refLowDayForHigh = isBear
-                ? loDay
-                : zi === firstBullZi && cycleLow != null
-                    ? cycleLowDay
-                    : prevBox
-                        ? prevLowDay
-                        : 0;
-            const refHighDayForLow = isBear ? (prevBox ? prevHighDay : 0) : hiDay;
+            const refLowDayForHigh = loDay;
+            const refHighDayForLow = prevBox ? prevHighDay : 0;
             const hiVsPrevLo = refLowForHigh != null && refLowForHigh !== 0
                 ? (((hiVal - refLowForHigh) / refLowForHigh) * 100).toFixed(1)
                 : null;
@@ -482,7 +481,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             const lblHi = document.createElement('div');
             lblHi.className = 'bz-label' + (isPrediction ? ' prediction' : '');
             lblHi.style.color = hiLblColor;
-            const hiBoxNo = isPrediction && z.boxIndex != null ? z.boxIndex + 1 : zi + 1;
+            // [Fix] boxIndex(DB 순번)를 우선 사용, 없으면 zi+1 폴백
+            const hiBoxNo = z.boxIndex != null ? Number(z.boxIndex) + 1 : zi + 1;
             const hiText = formatBoxLabel('H', hiBoxNo, hiVal, hiUsd, hiVsPrevLo, hiElapsedDays, isPrediction ? scenTag : '');
             lblHi.textContent = hiText;
             const startPxHi = timeScale.timeToCoordinate(dayToTime(z.startX));
@@ -530,7 +530,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
             const lblLo = document.createElement('div');
             lblLo.className = 'bz-label' + (isPrediction ? ' prediction' : '');
             lblLo.style.color = loLblColor;
-            const loBoxNo = isPrediction && z.boxIndex != null ? z.boxIndex + 1 : zi + 1;
+            // [Fix] boxIndex(DB 순번)를 우선 사용, 없으면 zi+1 폴백
+            const loBoxNo = z.boxIndex != null ? Number(z.boxIndex) + 1 : zi + 1;
             const loText = formatBoxLabel('L', loBoxNo, loVal, loUsd, loVsPrevHi, loElapsedDays);
             lblLo.textContent = loText;
             const startPxLo = timeScale.timeToCoordinate(dayToTime(z.startX));
@@ -617,27 +618,19 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
                     const predBadge = isPrediction
                         ? ` <span style="color:${highRiskCaution ? '#ff4466' : '#00d4ff'};font-size:9px;opacity:0.8">[PREDICTION${highRiskCaution ? ' · CAUTION: BEAR TRANSITION' : ''}]</span>`
                         : '';
-                    const hiRefLabel = isBear
-                        ? '현재박스 저점대비'
-                        : zi === firstBullZi && cycleLow != null
-                            ? '최저점(CYCLE LOW)대비'
-                            : prevBox
-                                ? '직전 박스 저점대비'
-                                : '100%대비';
-                    const loRefLabel = isBear
-                        ? prevBox
-                            ? '직전 박스 고점대비'
-                            : '100%대비'
-                        : '현재 박스 고점대비';
+                    const hiRefLabel = '현재박스 저점대비';
+                    const loRefLabel = prevBox ? '직전 박스 고점대비' : '100%대비';
                     const hiElapsedText = hiElapsedDays == null ? '-' : hiElapsedDays + 'd';
                     const loElapsedText = loElapsedDays == null ? '-' : loElapsedDays + 'd';
+                    // [Fix] tooltip도 boxIndex 기반 번호 사용
+                    const tooltipBoxNo = z.boxIndex != null ? Number(z.boxIndex) + 1 : zi + 1;
                     tooltip.innerHTML =
                         '<div class="bt-title" style="color:' +
                             (isBear ? '#ff4466' : '#FFB800') +
                             '">' +
                             titleLabel +
                             ' #' +
-                            (z.boxIndex != null ? z.boxIndex + 1 : zi + 1) +
+                            tooltipBoxNo +
                             predBadge +
                             '</div>' +
                             '<div class="bt-row"><span class="bt-key">고점</span><span class="bt-val">' +
@@ -799,8 +792,8 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
     if (chartState.showPrediction && cycleRef && cycleRef.peak_predictions && cycleRef.peak_predictions.length > 0) {
         cycleRef.peak_predictions.forEach((p) => {
             const dayX = p.day_x;
-            if (!isVisiblePredictionDay(dayX))
-                return;
+            // [Fix] path 라인과 동일하게 peak/bottom 마커도 visible 범위 필터 없이 항상 표시
+            // if (!isVisiblePredictionDay(dayX)) return;
             if (p.value == null || !Number.isFinite(p.value))
                 return;
             let val = p.value;
@@ -859,7 +852,7 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
         const bearPts = cycleRef.prediction_paths.bear || [];
         if (bullPts && bullPts.length > 1) {
             const lastU = bullPts[bullPts.length - 1];
-            if (lastU && lastU.value != null && Number.isFinite(lastU.value) && isVisiblePredictionDay(lastU.x)) {
+            if (lastU && lastU.value != null && Number.isFinite(lastU.value)) {
                 const xU = timeScale.timeToCoordinate(dayToTime(lastU.x));
                 if (xU == null)
                     return;
@@ -878,7 +871,7 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
         }
         if (bearPts && bearPts.length > 1) {
             const lastB = bearPts[bearPts.length - 1];
-            if (lastB && lastB.value != null && Number.isFinite(lastB.value) && isVisiblePredictionDay(lastB.x)) {
+            if (lastB && lastB.value != null && Number.isFinite(lastB.value)) {
                 const xEnd = timeScale.timeToCoordinate(dayToTime(lastB.x));
                 if (xEnd == null)
                     return;

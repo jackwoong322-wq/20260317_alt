@@ -286,16 +286,36 @@
 
 .chart-fullscreen {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   padding-top: 64px;
   background: transparent;
+  overflow: hidden;
 }
 
 .chart-shell {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* SummaryCard + SignalPanel 나란히 배치 */
+.dashboard-top-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .dashboard-top-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 980px) {
@@ -354,6 +374,7 @@
 
   .chart-fullscreen {
     padding-top: 56px;
+    height: 100%;
   }
 
   .header-slot {

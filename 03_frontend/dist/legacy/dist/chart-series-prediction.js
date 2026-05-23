@@ -1,6 +1,6 @@
 // ── Prediction path series (bull / bear dotted lines) ──────────────────────
 import { chartState } from './chart-logic.js';
-import { dayToTime, buildStepSeries, sanitizePathPoints, getVisiblePredictionDayRanges } from './chart-logic.js';
+import { dayToTime, buildStepSeries, sanitizePathPoints } from './chart-logic.js';
 import { setSeriesDataSafe, filterValidPoints } from './chart-series-helpers.js';
 function buildPathLinePoints(rawPts) {
     return rawPts
@@ -34,16 +34,9 @@ export function addPredictionPaths(coinId, coinData, cycle, cycleNum) {
         return;
     let bullPts = sanitizePathPoints(cycle.prediction_paths.bull || []);
     let bearPts = sanitizePathPoints(cycle.prediction_paths.bear || []);
-    const visibleRanges = getVisiblePredictionDayRanges(cycle.box_zones || [], cycle.data || []);
-    if (visibleRanges !== null) {
-        const isVisibleDay = (day) => {
-            const dayNum = Number(day);
-            return Number.isFinite(dayNum) &&
-                visibleRanges.some((range) => dayNum >= range.startX && dayNum <= range.endX);
-        };
-        bullPts = bullPts.filter((p) => isVisibleDay(p.x));
-        bearPts = bearPts.filter((p) => isVisibleDay(p.x));
-    }
+    // [Fix] path 라인은 예측 박스 가시성 범위와 무관하게 전체 궤적(bear+bull 연결)을 표시.
+    // 박스 레이블·마커는 visible 범위로 제한되지만 path 점선은 전체를 보여줘야 끊기지 않음.
+    // (이전: visibleRanges 필터로 active+next 2개 박스 범위만 렌더링 → 이후 경로 잘림)
     const meta = { coinId, symbol: coinData.symbol, cycleName: cycle.cycle_name, cycleNum };
     if (bullPts && bullPts.length > 1) {
         addSinglePathSeries(bullPts, 'rgba(255,217,102,0.36)', 'pred_bull', `${coinId}_${cycle.cycle_number}_path_bull`, meta);

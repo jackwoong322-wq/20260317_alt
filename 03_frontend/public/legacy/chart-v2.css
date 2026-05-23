@@ -31,16 +31,19 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
+  display: flex;
+  flex-direction: column;
   background: var(--bg);
   color: var(--text);
   font-family: 'JetBrains Mono', 'Manrope', sans-serif;
   font-size: 16px;
   line-height: 1.45;
-  overflow-x: hidden;
+  overflow: hidden;
   font-kerning: normal;
 }
 
@@ -87,7 +90,9 @@ body {
 
 .container {
   display: flex;
-  min-height: calc(100vh - 64px);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -323,14 +328,14 @@ body {
 .chart-area {
   position: relative;
   flex: 1;
-  min-height: 340px;
+  min-height: clamp(200px, 36vh, 340px);
   overflow: hidden;
 }
 
 #chart {
   width: 100%;
   height: 100%;
-  min-height: 340px;
+  min-height: clamp(200px, 36vh, 340px);
 }
 
 .overlay-layer {
@@ -647,19 +652,20 @@ body {
 
   .container {
     flex-direction: column;
-    min-height: calc(100vh - 90px);
+    min-height: 0;
+    overflow: hidden;
   }
 
   .sidebar {
     width: 100%;
     min-width: 0;
-    max-height: 33vh;
+    max-height: 28vh;
     border-right: none;
     border-bottom: 1px solid var(--border);
   }
 
   .coin-list {
-    max-height: calc(33vh - 104px);
+    max-height: calc(28vh - 104px);
   }
 
   .toolbar-actions {
@@ -671,7 +677,7 @@ body {
   }
 
   .chart-area {
-    min-height: 54vh;
+    min-height: clamp(200px, 38vh, 400px);
   }
 
   .cycle-btn {
