@@ -1,0 +1,211 @@
+/* SignalPanel.css — BTC 투자 신호 패널 스타일 */
+
+.signal-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--sp-border, rgba(255,255,255,0.12));
+  background: var(--sp-bg, rgba(255,255,255,0.04));
+  backdrop-filter: blur(8px);
+  transition: border-color 0.4s, background 0.4s;
+}
+
+/* ── 헤더 ── */
+.sp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sp-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sp-phase-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+}
+
+.sp-cycle-num {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+}
+
+/* 신호 뱃지 */
+.sp-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--sp-bg, rgba(255,255,255,0.07));
+  border: 1px solid var(--sp-border, rgba(255,255,255,0.15));
+}
+
+.sp-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.sp-signal-text {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--sp-color, #fff);
+}
+
+.sp-signal-sub {
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  font-weight: 600;
+}
+
+/* ── 섹션 공통 ── */
+.sp-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sp-field-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── 신뢰도 바 ── */
+.sp-confidence-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.sp-confidence-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.10);
+  overflow: hidden;
+}
+
+.sp-confidence-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sp-confidence-label {
+  font-size: 11px;
+  font-weight: 700;
+  tabular-nums: true;
+  white-space: nowrap;
+}
+
+/* ── 단계/액션 행 ── */
+.sp-stage-row {
+  flex-wrap: wrap;
+}
+
+.sp-stage-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sp-color, rgba(255,255,255,0.7));
+  background: var(--sp-bg, rgba(255,255,255,0.06));
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.sp-action {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+}
+
+/* ── 메시지 ── */
+.sp-message {
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(255,255,255,0.65);
+  margin: 0;
+  padding-top: 2px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ── 사이클 위치 ── */
+.sp-position-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sp-pos-val {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.75);
+}
+
+.sp-near-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--sp-color, #fff);
+  background: var(--sp-bg, rgba(255,255,255,0.08));
+  border: 1px solid var(--sp-border, rgba(255,255,255,0.2));
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+/* ── 스켈레톤 ── */
+.sp-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+
+.sp-sk-line {
+  height: 10px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.08);
+  animation: sp-pulse 1.4s ease-in-out infinite;
+}
+
+.sp-sk-wide  { width: 100%; }
+.sp-sk-mid   { width: 65%;  }
+.sp-sk-narrow{ width: 40%;  }
+
+@keyframes sp-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 0.25; }
+}
+
+/* ── 에러 ── */
+.sp-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(214,48,49,0.3);
+  background: rgba(214,48,49,0.08);
+  color: #e17055;
+  font-size: 12px;
+  font-weight: 600;
+}

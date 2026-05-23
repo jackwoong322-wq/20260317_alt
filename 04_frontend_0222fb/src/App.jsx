@@ -6,6 +6,7 @@ import BullBoxChart from './components/BullBoxChart'
 import TradingChart from './components/TradingChart'
 import SidebarNavigation from './components/layout/SidebarNavigation'
 import SummaryCard from './components/SummaryCard'
+import SignalPanel from './components/SignalPanel'
 import { fetchCycleMenu } from './lib/api'
 
 const FALLBACK_BEAR_CYCLES = [
@@ -163,9 +164,10 @@ function App() {
       )}
 
       <main id="main-content" className="chart-fullscreen" tabIndex="-1">
-        {/* 대시보드 상단 요약 카드 — 모든 뷰 공통 표시 */}
-        <div className="px-4 pt-3 pb-0">
+        {/* 대시보드 상단 — SummaryCard + SignalPanel */}
+        <div className="px-4 pt-3 pb-0 dashboard-top-row">
           <SummaryCard />
+          <SignalPanel />
         </div>
         <section className="chart-shell">
           {renderChart()}

@@ -233,6 +233,16 @@ function toggleSubBox() {
     }
     drawChart();
 }
+function toggleBB() {
+    chartState.showBB = !chartState.showBB;
+    const btn = document.getElementById('toggleBB');
+    if (btn) {
+        btn.style.cssText = chartState.showBB
+            ? 'border-color:#a78bfa;color:#d8ccff;background:rgba(167,139,250,0.12)'
+            : 'border-color:#4a6080;color:#4a6080;';
+    }
+    drawChart();
+}
 // ── Defaults & Bottom Override UI ─────────────────────
 export function initDefaults() {
     const manifest = getDashboardManifest() || {};
@@ -275,6 +285,12 @@ export function initDefaults() {
             ? 'border-color:#00d4ff;color:#00d4ff;background:rgba(0,212,255,0.10)'
             : 'border-color:#4a6080;color:#4a6080;';
     }
+    const bbBtn = document.getElementById('toggleBB');
+    if (bbBtn) {
+        bbBtn.style.cssText = chartState.showBB
+            ? 'border-color:#a78bfa;color:#d8ccff;background:rgba(167,139,250,0.12)'
+            : 'border-color:#4a6080;color:#4a6080;';
+    }
 }
 // ── Wire DOM events & expose toggles for onclick ───────
 const searchInput = document.getElementById('searchInput');
@@ -289,3 +305,4 @@ window.toggleBoxZone = toggleBoxZone;
 window.toggleBearBull = toggleBearBull;
 window.toggleExtendedForecast = toggleExtendedForecast;
 window.toggleSubBox = toggleSubBox;
+window.toggleBB = toggleBB;

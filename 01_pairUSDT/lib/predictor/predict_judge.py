@@ -114,3 +114,58 @@ def judge_bull_bear(
         _force_reason,
         _btc_anchor_triggered,
     )
+
+
+def judge_btc_with_signal(
+    last: pd.Series,
+    grp: pd.DataFrame,
+    max_cyc: int,
+    prob_bull: float,
+    prob_bear: float,
+    bottom_day,
+    btc_anchor,
+    bottom_lo=None,
+    *,
+    cycle_position=None,
+):
+    """BTC 전용: judge_bull_bear 결과에 투자 타이밍 신호를 추가.
+
+    기존 judge_bull_bear의 9-tuple을 유지하면서,
+    BTC 코인에 한해 SignalResult를 추가로 반환한다.
+
+    Args:
+        cycle_position: btc_cycle_position.CyclePosition (선택).
+                        None이면 signal=None 반환.
+
+    Returns:
+        (pred_is_bull, lower_low, prev_lo, slope_down, gain_pct, lo_chg_pct,
+         force_bear, force_reason, btc_anchor_triggered, signal_result)
+        signal_result: SignalResult | None
+    """
+    base = judge_bull_bear(
+        last, grp, max_cyc, prob_bull, prob_bear, bottom_day, btc_anchor, bottom_lo
+    )
+
+    signal_result = None
+    if cycle_position is not None and str(last.get("symbol", "")).upper() == "BTC":
+        try:
+            from lib.predictor.btc_investment_signal import generate_btc_signal
+            signal_result = generate_btc_signal(cycle_position)
+            _VERBOSE = {"BTC"}
+            if str(last["symbol"]).upper() in _VERBOSE:
+                print(
+                    f"\n[BTC Cy{max_cyc}] ── 투자 신호 ────────────────────────────────"
+                )
+                print(
+                    f"  신호: {signal_result.signal}"
+                    f"  신뢰도: {signal_result.confidence:.2f}"
+                    f"  박스진행률: {signal_result.box_progress_ratio:.0%}"
+                    f"  가격위치: {signal_result.price_position:.2f}"
+                )
+                print(f"  이유: {' | '.join(signal_result.reason)}")
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error("[judge_btc] 신호 생성 실패: %s", e)
+
+    return (*base, signal_result)
+

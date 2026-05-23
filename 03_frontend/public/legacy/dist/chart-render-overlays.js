@@ -793,8 +793,7 @@ export function renderBoxMarks(zones, cycleLowIdx, cycleData, timeScale, series,
         cycleRef.peak_predictions.forEach((p) => {
             const dayX = p.day_x;
             // [Fix] path 라인과 동일하게 peak/bottom 마커도 visible 범위 필터 없이 항상 표시
-            //if (!isVisiblePredictionDay(dayX))
-            //    return;
+            // if (!isVisiblePredictionDay(dayX)) return;
             if (p.value == null || !Number.isFinite(p.value))
                 return;
             let val = p.value;
