@@ -48,6 +48,11 @@ async function apiFetch(path, params = {}) {
   return response.json()
 }
 
+/* Dashboard summary card data */
+export async function fetchDashboardSummary() {
+  return apiFetch('/api/dashboard-summary')
+}
+
 /* Cycle comparison chart data */
 export async function fetchCycleComparison() {
   return apiFetch('/api/cycle-comparison')

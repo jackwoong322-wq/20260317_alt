@@ -7,6 +7,8 @@ import TradingChart from './components/TradingChart'
 import SidebarNavigation from './components/layout/SidebarNavigation'
 import SummaryCard from './components/SummaryCard'
 import SignalPanel from './components/SignalPanel'
+import ShapForcePlot from './components/ShapForcePlot'
+import SandboxSimulator from './components/SandboxSimulator'
 import { fetchCycleMenu } from './lib/api'
 
 const FALLBACK_BEAR_CYCLES = [
@@ -38,6 +40,16 @@ function App() {
   const [expandedSection, setExpandedSection] = useState('bear')
   const [headerContent, setHeaderContent] = useState(null)
   const [cycleMenu, setCycleMenu] = useState(null)
+  const [sandboxData, setSandboxData] = useState(null)
+  const [panelsExpanded, setPanelsExpanded] = useState(true)
+
+  const handleSimulate = (data) => {
+    setSandboxData(data)
+  }
+
+  const handleReset = () => {
+    setSandboxData(null)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -163,15 +175,30 @@ function App() {
         />
       )}
 
-      <main id="main-content" className="chart-fullscreen" tabIndex="-1">
+      <main id="main-content" className={`chart-fullscreen ${panelsExpanded ? 'panels-expanded' : 'panels-collapsed'}`} tabIndex="-1">
         {/* 대시보드 상단 — SummaryCard + SignalPanel */}
         <div className="px-4 pt-3 pb-0 dashboard-top-row">
-          <SummaryCard />
-          <SignalPanel />
+          <SummaryCard sandboxData={sandboxData} />
+          <SignalPanel sandboxData={sandboxData} />
         </div>
         <section className="chart-shell">
           {renderChart()}
         </section>
+        {/* 토글 바 */}
+        <div className="dashboard-toggle-bar" onClick={() => setPanelsExpanded(!panelsExpanded)}>
+          <span className="toggle-bar-label">
+            {panelsExpanded ? '▼ 시뮬레이터 & SHAP 분석 닫기' : '▲ 시뮬레이터 & SHAP 분석 열기'}
+          </span>
+        </div>
+        {/* 대시보드 하단 — SHAP 기여도 + 샌드박스 시뮬레이터 */}
+        <div className={`collapsible-bottom-panel ${panelsExpanded ? 'panels-expanded' : ''}`}>
+          <div className="collapsible-bottom-content">
+            <div className="px-4 pt-3 pb-4 dashboard-bottom-row grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ShapForcePlot />
+              <SandboxSimulator onSimulate={handleSimulate} onReset={handleReset} />
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   )

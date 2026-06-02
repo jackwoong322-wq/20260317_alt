@@ -225,7 +225,7 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
           text: `L${boxNumber} ${prediction.Start_Rate.toFixed(1)}% (중앙값)`,
         })
 
-        if (prediction.Peak_Rate_Hi !== undefined && peakDate) {
+        if (prediction.Peak_Rate_Hi != null && peakDate) {
           hiMarkers.push({
             time: peakDate,
             position: 'aboveBar',
@@ -234,7 +234,7 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
             text: `H${boxNumber} ${prediction.Peak_Rate_Hi.toFixed(1)}% (+1σ)`,
           })
         }
-        if (prediction.Peak_Rate_Lo !== undefined && peakDate) {
+        if (prediction.Peak_Rate_Lo != null && peakDate) {
           loMarkers.push({
             time: peakDate,
             position: 'aboveBar',
@@ -268,7 +268,7 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
       }
 
       const hiPath = buildDailyPredPath(basePoint.time, basePoint.value, (prediction) => {
-        if (prediction.Peak_Rate_Hi === undefined) return null
+        if (prediction.Peak_Rate_Hi == null) return null
         return {
           s: prediction.Start_Timestamp,
           pk: prediction.Peak_Timestamp,
@@ -291,7 +291,7 @@ export default function BearBoxChart({ cycleNumber = 4 }) {
       }
 
       const loPath = buildDailyPredPath(basePoint.time, basePoint.value, (prediction) => {
-        if (prediction.Peak_Rate_Lo === undefined) return null
+        if (prediction.Peak_Rate_Lo == null) return null
         return {
           s: prediction.Start_Timestamp,
           pk: prediction.Peak_Timestamp,

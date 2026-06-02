@@ -71,7 +71,7 @@ function Skeleton() {
   )
 }
 
-export default function SignalPanel() {
+export default function SignalPanel({ sandboxData }) {
   const [data, setData] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -92,9 +92,14 @@ export default function SignalPanel() {
       }
     }
 
-    load()
+    if (sandboxData) {
+      setData(sandboxData)
+      setIsLoading(false)
+    } else {
+      load()
+    }
     return () => { cancelled = true }
-  }, [])
+  }, [sandboxData])
 
   if (isLoading) return <Skeleton />
 
