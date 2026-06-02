@@ -8,7 +8,8 @@
 
 import { useState, useEffect } from 'react'
 import SignalBadge from './SignalBadge'
-import { fetchDashboardSummary } from '../mocks/dashboardMock'
+import { fetchDashboardSummary as fetchMockSummary } from '../mocks/dashboardMock'
+import { fetchDashboardSummary } from '../lib/api'
 
 function formatPrice(value) {
   if (value == null) return '—'
@@ -56,7 +57,7 @@ function PositionBar({ percent }) {
  *   nextPredictedPrice?: number,
  * }} props
  */
-export default function SummaryCard({ cycleNumber, positionPercent, nextPredictedPrice }) {
+export default function SummaryCard({ cycleNumber, positionPercent, nextPredictedPrice, sandboxData }) {
   const [summary, setSummary] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -70,20 +71,10 @@ export default function SummaryCard({ cycleNumber, positionPercent, nextPredicte
         setError(null)
         let data
 
-        const apiBase = import.meta.env.VITE_API_URL
-        if (apiBase) {
-          try {
-            const res = await fetch(`${apiBase}/api/dashboard-summary`)
-            if (res.ok) {
-              data = await res.json()
-            } else {
-              throw new Error(`API ${res.status}`)
-            }
-          } catch {
-            data = await fetchDashboardSummary()
-          }
-        } else {
+        try {
           data = await fetchDashboardSummary()
+        } catch {
+          data = await fetchMockSummary()
         }
 
         if (!cancelled) setSummary(data)
@@ -94,8 +85,10 @@ export default function SummaryCard({ cycleNumber, positionPercent, nextPredicte
       }
     }
 
-    // props로 직접 주입된 경우 API 호출 스킵
-    if (cycleNumber != null && positionPercent != null && nextPredictedPrice != null) {
+    if (sandboxData) {
+      setSummary(sandboxData)
+      setIsLoading(false)
+    } else if (cycleNumber != null && positionPercent != null && nextPredictedPrice != null) {
       setSummary({
         cycleNumber,
         positionPercent,
@@ -111,7 +104,7 @@ export default function SummaryCard({ cycleNumber, positionPercent, nextPredicte
     }
 
     return () => { cancelled = true }
-  }, [cycleNumber, positionPercent, nextPredictedPrice])
+  }, [cycleNumber, positionPercent, nextPredictedPrice, sandboxData])
 
   /* ── 로딩 상태 ── */
   if (isLoading) {

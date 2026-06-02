@@ -293,15 +293,72 @@
   height: 100%;
   padding-top: 64px;
   background: transparent;
-  overflow: hidden;
+  overflow: hidden; /* 노트북 한 화면에 딱 맞게 외부 스크롤 비활성화 */
 }
 
+/* 차트 영역: 남는 높이를 유연하게 다 차지하되 최소 높이 확보 */
 .chart-shell {
-  display: flex;
-  flex-direction: column;
   flex: 1;
-  min-height: 0;
+  min-height: 280px;
+}
+
+/* Collapsible Bottom Panel */
+.collapsible-bottom-panel {
+  opacity: 0;
+  visibility: hidden;
+  height: 0;
+  transition: height 320ms cubic-bezier(0.25, 1, 0.5, 1),
+              opacity 240ms cubic-bezier(0.25, 1, 0.5, 1),
+              visibility 240ms cubic-bezier(0.25, 1, 0.5, 1);
   overflow: hidden;
+  flex: none;
+}
+
+.collapsible-bottom-panel.panels-expanded {
+  opacity: 1;
+  visibility: visible;
+  height: 310px; /* 노트북 한 화면 비율에 맞춘 하단 컴팩트 고정 높이 */
+  flex: none;
+}
+
+.collapsible-bottom-content {
+  height: 100%;
+  min-height: 0;
+}
+
+/* 토글 바 스타일 */
+.dashboard-toggle-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px var(--space-lg);
+  margin: 6px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-panel) 88%, transparent);
+  cursor: pointer;
+  transition: all 160ms ease;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.dashboard-toggle-bar:hover {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-panel-strong) 92%, transparent);
+}
+
+.toggle-bar-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-soft);
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dashboard-toggle-bar:hover .toggle-bar-label {
+  color: var(--color-accent);
 }
 
 /* SummaryCard + SignalPanel 나란히 배치 */
@@ -351,10 +408,13 @@
     width: min(88vw, 320px);
     transform: translateX(-100%);
     z-index: 60;
+    visibility: hidden;
+    transition: transform 220ms ease, visibility 220ms ease;
   }
 
   .sidebar.open {
     transform: translateX(0);
+    visibility: visible;
   }
 
   .overlay {

@@ -43,7 +43,6 @@ export default function SidebarNavigation({
     <aside
       id="sidebar-navigation"
       className={`sidebar ${menuOpen ? 'open' : ''}`}
-      aria-hidden={!menuOpen}
       aria-label="사이클 차트 탐색"
     >
       <div className="sidebar-header">

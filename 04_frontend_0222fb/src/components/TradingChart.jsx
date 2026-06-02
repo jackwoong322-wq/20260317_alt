@@ -137,6 +137,8 @@ const MA_TOGGLES = [
   { key: 'ma50', label: 'MA50', tone: 'steel' },
   { key: 'ma200', label: 'MA200', tone: 'violet' },
   { key: 'bb20', label: 'BB (20,2)', tone: 'accent' },
+  { key: 'mayer', label: 'Mayer Multiple (Left Scale)', tone: 'info' },
+  { key: 'hash_ribbons', label: 'Hash Ribbons (30/90d)', tone: 'success' },
 ]
 
 export default function TradingChart() {
@@ -150,7 +152,7 @@ export default function TradingChart() {
   const rsiChartRef = useRef(null)
   const macdChartRef = useRef(null)
 
-  const [showMA, setShowMA] = useState({ ma20: true, ma50: true, ma200: true, bb20: false })
+  const [showMA, setShowMA] = useState({ ma20: true, ma50: true, ma200: true, bb20: false, mayer: false, hash_ribbons: false })
   const [currentPrice, setCurrentPrice] = useState(null)
   const [priceChange, setPriceChange] = useState(null)
   const [chartData, setChartData] = useState(null)
@@ -188,14 +190,26 @@ export default function TradingChart() {
         color: item.close >= item.open ? 'rgba(115, 184, 141, 0.5)' : 'rgba(209, 125, 104, 0.5)',
       }))
 
+      const calculatedMa200 = calculateMA(candleData, 200)
+      const mayerData = candleData.map((d) => {
+        const maVal = calculatedMa200.find((m) => m.time === d.time)?.value
+        return {
+          time: d.time,
+          value: maVal ? d.close / maVal : 1.0,
+        }
+      })
+
       setChartData({
         candleData,
         volumeData,
         maData: {
           ma20: calculateMA(candleData, 20),
           ma50: calculateMA(candleData, 50),
-          ma200: calculateMA(candleData, 200),
+          ma200: calculatedMa200,
+          ma30: calculateMA(candleData, 30),
+          ma60: calculateMA(candleData, 90),
         },
+        mayerData,
         bbData: calculateBollingerBands(candleData, 20, 2),
         rsiData: calculateRSI(candleData),
         macdData: calculateMACD(candleData),
@@ -238,6 +252,11 @@ export default function TradingChart() {
         ...BASE_CHART_OPTIONS,
         width,
         height: mainContainerRef.current.clientHeight || 400,
+        leftPriceScale: {
+          visible: showMA.mayer,
+          borderColor: CHART_THEME.border,
+          textColor: CHART_THEME.textMuted,
+        },
       })
       mainChartRef.current = mainChart
 
@@ -273,6 +292,33 @@ export default function TradingChart() {
         const middleSeries = mainChart.addLineSeries({ color: 'rgba(167, 139, 250, 0.8)', lineWidth: 1, title: 'BB Middle' });
         middleSeries.setData(chartData.bbData.map(d => ({ time: d.time, value: d.middle })));
       }
+
+      if (showMA.mayer && chartData.mayerData) {
+        const mayerSeries = mainChart.addLineSeries({
+          color: '#38bdf8',
+          lineWidth: 2,
+          priceScaleId: 'left',
+          title: 'Mayer Multiple',
+        })
+        mayerSeries.setData(chartData.mayerData)
+      }
+
+      if (showMA.hash_ribbons && chartData.maData.ma30 && chartData.maData.ma60) {
+        const ribbon30 = mainChart.addLineSeries({
+          color: '#00b894',
+          lineWidth: 1.5,
+          title: 'HR 30d',
+        })
+        ribbon30.setData(chartData.maData.ma30)
+
+        const ribbon60 = mainChart.addLineSeries({
+          color: '#d63031',
+          lineWidth: 2,
+          title: 'HR 90d',
+        })
+        ribbon60.setData(chartData.maData.ma60)
+      }
+
       mainChart.timeScale().fitContent()
 
       if (volContainerRef.current) {
